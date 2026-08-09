@@ -148,13 +148,34 @@ def _report_comment_failure(data):
     print(json.dumps(data, ensure_ascii=False)[:800], file=sys.stderr)
 
 
-def _create_comment(session, tokens, actor_id, post_id: str, text: str):
-    """Comment on one of our own posts, exiting non-zero if it did not land."""
-    ok, data = _try_comment(session, tokens, actor_id, post_id, text)
-    if not ok:
-        _report_comment_failure(data)
-        sys.exit(1)
-    print(f"Comment created on post {post_id}: {text}")
+def _create_comment(session, tokens, actor_id, post_id: str, text: str,
+                    attempts=3, delay=5, initial_delay=0, fail_hint=""):
+    """Comment on one of our own posts, exiting non-zero if it did not land.
+
+    Retries because Facebook needs a moment to index a *just-created* post:
+    comment too soon and the mutation answers 1446013「貼文已移除」even though
+    the post is fine. That lag hits scheduled AND immediately-published posts,
+    so the retry lives here on the shared path — it was scheduled-only until
+    2026-08-09, and the immediate path silently dropped the URL comment twice
+    (2026-08-04 subscriber post, 2026-08-09 before-you-borrow post).
+
+    `fail_hint` is the recovery line printed when every attempt failed. The
+    post itself already exists by then, so callers must never re-post.
+    """
+    data = {}
+    for attempt in range(attempts):
+        if attempt:
+            time.sleep(delay)
+        elif initial_delay:
+            time.sleep(initial_delay)
+        ok, data = _try_comment(session, tokens, actor_id, post_id, text)
+        if ok:
+            print(f"Comment created on post {post_id}: {text}")
+            return
+    _report_comment_failure(data)
+    if fail_hint:
+        print(fail_hint, file=sys.stderr)
+    sys.exit(1)
 
 
 def _warn_if_schedule_drifted_epoch(stored: int, requested: str):
@@ -254,22 +275,14 @@ def _comment_on_scheduled(session, tokens, actor_id, comment, schedule_at,
     post_id = row["post_id"]
     print(f"  post_id: {post_id} ({_fmt_epoch(row['scheduled']) or row['when_text']})")
     _warn_if_schedule_drifted_epoch(row["scheduled"], schedule_at)
-    data = {}
-    for attempt in range(attempts):
-        if attempt:
-            time.sleep(5)
-        ok, data = _try_comment(session, tokens, actor_id, post_id, comment)
-        if ok:
-            print(f"Comment created on post {post_id}: {comment}")
-            return
-    _report_comment_failure(data)
-    print(
-        "The post itself IS scheduled — only the comment failed. Retry with "
-        "'fb post-list-scheduled' then "
-        "'fb comment-scheduled <#> \"text\" --match \"...\"'.",
-        file=sys.stderr,
+    _create_comment(
+        session, tokens, actor_id, post_id, comment, attempts=attempts,
+        fail_hint=(
+            "The post itself IS scheduled — only the comment failed. Retry with "
+            "'fb post-list-scheduled' then "
+            "'fb comment-scheduled <#> \"text\" --match \"...\"'."
+        ),
     )
-    sys.exit(1)
 
 
 def cmd_post(args):
@@ -461,7 +474,18 @@ def cmd_post(args):
                 story_id=story_create.get("story_id") or "", text=args.text,
             )
         else:
-            _create_comment(session, tokens, actor_id, str(post_id), args.comment)
+            # Same indexing lag as the scheduled path: the post exists but is
+            # not commentable for a few seconds. Wait once before the first
+            # try, then let _create_comment retry.
+            _create_comment(
+                session, tokens, actor_id, str(post_id), args.comment,
+                initial_delay=5,
+                fail_hint=(
+                    f"The post itself IS published (post_id {post_id}) — only "
+                    f"the comment failed. Do NOT re-post; retry with "
+                    f"'fb comment {post_id} \"text\"'."
+                ),
+            )
 
 
 # ── Comments ─────────────────────────────────────────────────────────────────

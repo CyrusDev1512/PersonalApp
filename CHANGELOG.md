@@ -5,6 +5,29 @@ Originally forked from [htlin222/fbpost](https://github.com/htlin222/fbpost);
 maintained standalone since 2026-07-30 (upstream inactive since March 2026,
 PRs #1/#2 closed unmerged). MIT license and original copyright retained.
 
+## [0.7.3] - 2026-08-09
+
+### Fixed
+
+- **`fb post --comment` now retries on the immediate (non-scheduled) path too.**
+  Facebook needs a few seconds to index a freshly created post; comment sooner
+  and the mutation answers 1446013「貼文已移除」while the post itself is fine.
+  v0.7.1 added a retry, but only inside the `--schedule` branch, so an
+  immediately-published post silently lost its URL comment (hit twice: the
+  2026-08-04 subscriber post and the 2026-08-09 public post — both had to be
+  fixed by hand afterwards).
+  The retry now lives in the shared `_create_comment()` (3 attempts, 5s apart,
+  plus a 5s wait before the first try on a just-published post), and the
+  scheduled path calls the same helper instead of keeping its own copy.
+- On failure both paths print a recovery hint naming the exact command
+  (`fb comment <post_id> "..."` / `fb comment-scheduled <#> ... --match ...`)
+  and state that the post already exists, so it is never re-posted.
+
+Verified live: SELF post + `--comment` on the immediate path landed the
+comment (the case that used to fail), test post deleted afterwards.
+
+---
+
 ## [0.7.2] - 2026-08-04
 
 ### Added
