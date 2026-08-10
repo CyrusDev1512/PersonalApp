@@ -800,11 +800,18 @@ def cmd_insights(args):
     from scripts.fb_session import fetch_insights
 
     end = args.end or datetime.now().strftime("%Y-%m-%d")
+    end_dt = datetime.strptime(end, "%Y-%m-%d")
     if args.start:
-        start = args.start
+        # Explicit range → single layer.
+        ranges = [(args.start, end)]
     else:
-        end_dt = datetime.strptime(end, "%Y-%m-%d")
-        start = (end_dt - timedelta(days=args.days - 1)).strftime("%Y-%m-%d")
+        # Layered view: a short-term layer plus the main range, so one run
+        # shows both the recent pulse and the longer trend.
+        day_counts = [args.days] if args.days <= 7 else sorted({7, args.days})
+        ranges = [
+            ((end_dt - timedelta(days=n - 1)).strftime("%Y-%m-%d"), end)
+            for n in sorted(day_counts)
+        ]
 
     cookies = load_cookies(args.profile)
     actor_id = cookies["actor_id"]
@@ -816,15 +823,29 @@ def cmd_insights(args):
         ("views", "audience", "earnings", "subscriptions")
         if args.section == "all" else (args.section,)
     )
-    data = fetch_insights(session, tokens, actor_id, page_id, start, end, sections)
+
+    layers = []
+    for start, end_ in ranges:
+        data = fetch_insights(session, tokens, actor_id, page_id, start, end_, sections)
+        layers.append({"start": start, "end": end_, **data})
 
     if args.json:
-        payload = {"start": start, "end": end, "page_id": page_id, **data}
+        payload = {"page_id": page_id, "layers": layers}
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=1)
         print(f"Saved: {args.json}")
 
-    print(f"Insights {start} → {end}  (FB buckets days in US Pacific time)")
+    print("(FB buckets days in US Pacific time; the current day is a partial bucket)")
+    for layer in layers:
+        _print_insights_layer(layer, args.daily)
+
+
+def _print_insights_layer(data: dict, daily: bool):
+    days = (
+        datetime.strptime(data["end"], "%Y-%m-%d")
+        - datetime.strptime(data["start"], "%Y-%m-%d")
+    ).days + 1
+    print(f"\n═══ Last {days} days  ({data['start']} → {data['end']}) ═══")
 
     views = data.get("views") or {}
     if views:
@@ -832,7 +853,7 @@ def cmd_insights(args):
         print(f"\n■ Views: {total.get('value', 0):,}{_fmt_delta(total)}")
         _print_breakdown("By follow status", views.get("views_by_follow_status", []))
         _print_breakdown("By content type", views.get("views_by_content_type", []))
-        if args.daily:
+        if daily:
             print("  Daily views:")
             _print_series(views.get("views_daily", []))
 
@@ -847,7 +868,7 @@ def cmd_insights(args):
         _print_breakdown("By age", audience.get("followers_by_age_gender", []))
         _print_breakdown("By city", audience.get("followers_by_city", []))
         _print_breakdown("By country", audience.get("followers_by_country", []))
-        if args.daily:
+        if daily:
             print("  Daily follower count:")
             _print_series(audience.get("followers_daily", []))
 
@@ -856,21 +877,27 @@ def cmd_insights(args):
         total = earnings.get("earnings_usd", {})
         print(f"\n■ Earnings: US${total.get('value', 0):,.2f}{_fmt_delta(total)}")
         _print_breakdown("By program", earnings.get("earnings_by_program", []), unit="USD")
-        if args.daily:
+        if daily:
             print("  Daily earnings (USD):")
             _print_series(earnings.get("earnings_daily", []))
 
     subs = data.get("subscriptions") or {}
     if subs:
-        total = subs.get("subscribers", {})
+        # The subscriber-list count is the authoritative number; the insights
+        # card (subscribers_value) lags it.
+        list_count = subs.get("subscribers_list_count")
+        card = subs.get("subscribers", {}).get("value")
         gained = subs.get("subscribers_gained", {}).get("value", 0)
         canceled = subs.get("subscribers_canceled", {}).get("value", 0)
         program = subs.get("program_earnings_usd", {}).get("value")
-        line = (f"\n■ Subscribers: {total.get('value', 0):,} now"
+        now = list_count if list_count is not None else card
+        line = (f"\n■ Subscribers: {now:,} now"
                 f"  (+{gained:,} gained, -{canceled:,} canceled this period)")
         if program is not None:
             line += f"  earnings US${program:,.2f}"
         print(line)
+        if list_count is not None and card is not None and card != list_count:
+            print(f"  (insights card lags: shows {card:,})")
 
 
 def cmd_comments(args):

@@ -62,6 +62,17 @@ INSIGHTS_EARNINGS_DOC_ID = "34651846401127144"
 # the program's earnings. Same SSR-preload situation as the insights queries.
 INSIGHTS_SUBSCRIPTIONS_DOC_ID = "27271010619228280"
 
+# ProdashCometMonetizationFubsSubscriberListCountFragment — the 訂閱者名單
+# dialog's count. This is the AUTHORITATIVE subscriber number: the insights
+# card above (subscribers_value) lags behind it by design (2026-08-10: card 43
+# vs list 44, user-confirmed the list is the one that matches reality).
+SUBSCRIBER_LIST_COUNT_DOC_ID = "24988498120784204"
+
+# ProdashCometMonetizationFubsSubscriberListFragment — the list itself
+# (user name/id, months subscribed, cursor pagination). Not surfaced in the
+# CLI yet; kept for a future `fb subscribers` command.
+SUBSCRIBER_LIST_DOC_ID = "25170101165918242"
+
 # base64('privacy_scope_renderer:{"id":8787670733}') — the timeline composer's
 # privacy scope, taken verbatim from the web client's own request.
 PRIVACY_WRITE_ID = "cHJpdmFjeV9zY29wZV9yZW5kZXJlcjp7ImlkIjo4Nzg3NjcwNzMzfQ"

@@ -1044,8 +1044,10 @@ def fetch_insights(session, tokens, actor_id, page_id, start: str, end: str,
                 "earnings_by_program": _breakdown(find("earnings_by_program_type")),
             }
         elif section == "subscriptions":
-            # subscribers_value is the CURRENT subscriber count (not bound to
-            # the range); gained/canceled are within the range.
+            # subscribers_value is the insights card's CURRENT count (not bound
+            # to the range); gained/canceled are within the range. The card
+            # lags the subscriber list, so the list count (fetched below) is
+            # the authoritative number.
             result[section] = {
                 "subscribers": _metric(find("subscribers_value")),
                 "subscribers_gained": _metric(find("subscribers_gained_value")),
@@ -1053,4 +1055,26 @@ def fetch_insights(session, tokens, actor_id, page_id, start: str, end: str,
                 "program_earnings_usd": _metric(
                     (find("profile_earnings") or {}).get("query_result")),
             }
+            result[section]["subscribers_list_count"] = fetch_subscriber_list_count(
+                session, tokens, actor_id, page_id)
     return result
+
+
+def fetch_subscriber_list_count(session, tokens, actor_id, page_id) -> int | None:
+    """Authoritative subscriber count, from the 訂閱者名單 dialog's own query."""
+    from scripts.fb_config import SUBSCRIBER_LIST_COUNT_DOC_ID
+
+    variables = {
+        "badges_filters": [], "count": 10, "cursor": None, "search_string": "",
+        "sorting_method": "TIME_SUBSCRIBED_SHORTEST", "id": page_id,
+    }
+    try:
+        data = graphql_request(
+            session, tokens, actor_id, SUBSCRIBER_LIST_COUNT_DOC_ID,
+            "ProdashCometMonetizationFubsSubscriberListCountFragment", variables,
+        )
+    except Exception as exc:
+        print(f"Warning: subscriber list count query failed: {exc}", file=sys.stderr)
+        return None
+    node = _find_key(data or {}, "supporters_for_prodash_subscribers_list") or {}
+    return node.get("count")

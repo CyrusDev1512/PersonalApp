@@ -21,6 +21,13 @@ PRs #1/#2 closed unmerged). MIT license and original copyright retained.
   gained/canceled within the range, and the subscription program's earnings,
   from the Monetization › Subscriptions management page's query
   (`ProdashCometV2SubscriptionsManagementQuery`).
+- **Subscriber count reads the 訂閱者名單 dialog's own query**
+  (`…FubsSubscriberListCountFragment`) — the insights card lags it (43 vs 44
+  on ship day); when they differ the CLI prints both, leading with the list.
+- **Layered output by default**: a plain `fb insights` prints a 7-day layer
+  followed by the 28-day layer, so one run shows the recent pulse and the
+  longer trend. `--days N` keeps the 7-day layer alongside N (unless N ≤ 7);
+  an explicit `--start`/`--end` runs that single range only.
 - Read-only, no Page required — works on a professional-mode personal profile.
 
 ### Notes
