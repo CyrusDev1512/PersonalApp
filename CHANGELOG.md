@@ -28,6 +28,13 @@ PRs #1/#2 closed unmerged). MIT license and original copyright retained.
   followed by the 28-day layer, so one run shows the recent pulse and the
   longer trend. `--days N` keeps the 7-day layer alongside N (unless N ≤ 7);
   an explicit `--start`/`--end` runs that single range only.
+- **`fb subscribers`** — the full subscriber list (name + months subscribed),
+  cursor-paginated.
+- **`fb snapshot`** — dated snapshot of the subscriber list plus 7d/28d
+  insights summaries into `profiles/<profile>/snapshots/`, with a joined/left
+  diff against the previous snapshot. Membership history is the only insights
+  data Facebook cannot return retroactively; snapshots live under `profiles/`
+  (gitignored) because subscriber names are third-party personal data.
 - Read-only, no Page required — works on a professional-mode personal profile.
 
 ### Notes

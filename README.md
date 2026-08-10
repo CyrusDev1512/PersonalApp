@@ -285,6 +285,23 @@ Notes:
   XHR in a network capture — the doc_ids came out of the page HTML's
   `preloaderID`/`queryID` entries (see `scripts/fb_config.py`).
 
+### Subscribers & snapshots
+
+```bash
+uv run fb subscribers                      # the 訂閱者名單: name + months subscribed
+uv run fb subscribers --json subs.json
+uv run fb snapshot                         # dated snapshot + diff vs the previous one
+```
+
+`fb snapshot` writes `profiles/<profile>/snapshots/YYYY-MM-DD.json` (subscriber
+list + a 7-day and 28-day insights summary) and prints who joined/left since
+the last snapshot. Run it on a weekly schedule and you get the one dataset
+Facebook cannot give you retroactively: **membership history** — everything
+else (views/followers/earnings curves) can be re-queried for any past range
+with `fb insights`, so there is no need to hoard it. The snapshots directory
+is inside `profiles/` and therefore gitignored: subscriber names are other
+people's personal data and must never reach a public repo.
+
 ### Comments
 
 ```bash

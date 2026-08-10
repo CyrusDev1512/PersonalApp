@@ -900,6 +900,86 @@ def _print_insights_layer(data: dict, daily: bool):
             print(f"  (insights card lags: shows {card:,})")
 
 
+def _insights_session(profile, page):
+    cookies = load_cookies(profile)
+    actor_id = cookies["actor_id"]
+    session = create_session(cookies)
+    tokens = fetch_tokens(session)
+    page_id = page or fetch_page_id(session)
+    return session, tokens, actor_id, page_id
+
+
+def cmd_subscribers(args):
+    """List the 訂閱者名單 (name + months subscribed)."""
+    from scripts.fb_session import fetch_subscriber_list
+
+    session, tokens, actor_id, page_id = _insights_session(args.profile, args.page)
+    subs = fetch_subscriber_list(session, tokens, actor_id, page_id)
+    if args.json:
+        with open(args.json, "w", encoding="utf-8") as f:
+            json.dump(subs, f, ensure_ascii=False, indent=1)
+        print(f"Saved: {args.json}")
+    print(f"Subscribers ({len(subs)}):")
+    for i, sub in enumerate(subs, 1):
+        months = sub.get("months_subscribed")
+        months_text = f"{months} mo" if months is not None else "?"
+        print(f"  {i:>3}. {sub.get('name')}  ({months_text})")
+
+
+def _snapshot_dir(profile: str) -> str:
+    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(base, "profiles", profile, "snapshots")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def cmd_snapshot(args):
+    """Save a dated snapshot (subscriber list + insights summary) and diff it
+    against the previous one. Membership history is the one thing Facebook
+    does not let you query retroactively — that is what this preserves.
+    Snapshots live in profiles/<profile>/snapshots/ (gitignored)."""
+    from scripts.fb_session import fetch_insights, fetch_subscriber_list
+
+    session, tokens, actor_id, page_id = _insights_session(args.profile, args.page)
+    today = datetime.now().strftime("%Y-%m-%d")
+    subs = fetch_subscriber_list(session, tokens, actor_id, page_id)
+
+    layers = {}
+    for days in (7, 28):
+        start = (datetime.now() - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+        layers[f"{days}d"] = fetch_insights(
+            session, tokens, actor_id, page_id, start, today)
+
+    snap_dir = _snapshot_dir(args.profile)
+    previous = sorted(
+        f for f in os.listdir(snap_dir)
+        if f.endswith(".json") and f != f"{today}.json"
+    )
+    out_path = os.path.join(snap_dir, f"{today}.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {"date": today, "page_id": page_id, "subscribers": subs,
+             "insights": layers},
+            f, ensure_ascii=False, indent=1,
+        )
+    print(f"Snapshot saved: {out_path}  ({len(subs)} subscribers)")
+
+    if previous:
+        with open(os.path.join(snap_dir, previous[-1]), encoding="utf-8") as f:
+            prev = json.load(f)
+        prev_subs = {s.get("user_id"): s for s in prev.get("subscribers", [])}
+        now_subs = {s.get("user_id"): s for s in subs}
+        joined = [now_subs[uid]["name"] for uid in now_subs if uid not in prev_subs]
+        left = [prev_subs[uid]["name"] for uid in prev_subs if uid not in now_subs]
+        since = prev.get("date", previous[-1][:-5])
+        if joined:
+            print(f"  Joined since {since}: {', '.join(joined)}")
+        if left:
+            print(f"  Left since {since}: {', '.join(left)}")
+        if not joined and not left:
+            print(f"  No membership change since {since}.")
+
+
 def cmd_comments(args):
     """List unreplied comments from Professional Dashboard."""
     cookies = load_cookies(args.profile)
@@ -1480,6 +1560,20 @@ def main():
     insights_parser.add_argument("--json", help="Write the full structured data to this path")
     insights_parser.add_argument("--page", help="Dashboard page id (default: auto-detected)")
 
+    # subscribers (read-only)
+    subscribers_parser = subparsers.add_parser(
+        "subscribers", help="List the subscriber list (name + months subscribed)",
+    )
+    subscribers_parser.add_argument("--json", help="Write the list to this path")
+    subscribers_parser.add_argument("--page", help="Dashboard page id (default: auto-detected)")
+
+    # snapshot (read-only; writes into profiles/<profile>/snapshots/)
+    snapshot_parser = subparsers.add_parser(
+        "snapshot",
+        help="Save a dated subscriber-list + insights snapshot and diff vs the last one",
+    )
+    snapshot_parser.add_argument("--page", help="Dashboard page id (default: auto-detected)")
+
     # reply
     reply_parser = subparsers.add_parser("reply", help="Reply to a comment")
     reply_parser.add_argument("id", help="Comment index (from 'comments' list) or base64 comment ID")
@@ -1556,6 +1650,10 @@ def main():
         cmd_comments(args)
     elif args.command == "insights":
         cmd_insights(args)
+    elif args.command == "subscribers":
+        cmd_subscribers(args)
+    elif args.command == "snapshot":
+        cmd_snapshot(args)
     elif args.command == "reply":
         cmd_reply(args)
     elif args.command == "login":

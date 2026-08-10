@@ -1078,3 +1078,46 @@ def fetch_subscriber_list_count(session, tokens, actor_id, page_id) -> int | Non
         return None
     node = _find_key(data or {}, "supporters_for_prodash_subscribers_list") or {}
     return node.get("count")
+
+
+def fetch_subscriber_list(session, tokens, actor_id, page_id, limit: int = 500) -> list[dict]:
+    """The full 訂閱者名單: [{name, user_id, months_subscribed}], via cursor
+    pagination. Names are third-party personal data — keep them in profiles/
+    (gitignored), never in anything that ships."""
+    from scripts.fb_config import SUBSCRIBER_LIST_DOC_ID
+
+    out, cursor = [], None
+    while len(out) < limit:
+        variables = {
+            "badges_filters": [], "count": min(50, limit - len(out)),
+            "cursor": cursor, "search_string": "",
+            "sorting_method": "TIME_SUBSCRIBED_SHORTEST", "id": page_id,
+        }
+        data = graphql_request(
+            session, tokens, actor_id, SUBSCRIBER_LIST_DOC_ID,
+            "ProdashCometMonetizationFubsSubscriberListFragment", variables,
+        )
+        conn = _find_key(data or {}, "supporters_for_prodash_subscribers_list") or {}
+        edges = conn.get("edges") or []
+        if not edges:
+            break
+        for edge in edges:
+            node = edge.get("node") or {}
+            user = node.get("user") or {}
+            out.append({
+                "name": user.get("name"),
+                "user_id": user.get("id"),
+                "months_subscribed": node.get("number_of_months_subscribed"),
+            })
+            cursor = edge.get("cursor") or cursor
+        info = conn.get("page_info") or {}
+        if not (info.get("has_next_page") and info.get("end_cursor")):
+            # This fragment may omit page_info; fall back to the last edge
+            # cursor until a short page arrives.
+            if info:
+                break
+            if len(edges) < variables["count"]:
+                break
+        else:
+            cursor = info["end_cursor"]
+    return out
