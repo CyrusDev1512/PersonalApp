@@ -249,6 +249,38 @@ Two gotchas the command already handles, worth knowing about:
   `scripts/report_to_md.py <report.csv>` converts them to Taipei (+15h) and
   emits a markdown table; adapt the offset for your timezone.
 
+### Profile insights (views / followers / earnings)
+
+Reads the Professional Dashboard 洞察報告 through pure GraphQL — the same
+data the Insights tabs render, which the CSV export above does not cover:
+
+```bash
+uv run fb insights                         # last 28 days: views + audience + earnings
+uv run fb insights --days 90               # any custom range length
+uv run fb insights --start 2026-06-01 --end 2026-08-01
+uv run fb insights --section audience      # one section only
+uv run fb insights --daily                 # include the daily time series
+uv run fb insights --json insights.json    # full structured dump for analysis
+```
+
+What you get per section:
+
+- **views** — total views with period-over-period delta, daily views series,
+  follower vs non-follower split, split by content type, posts-published series
+- **audience** — follower total, new / lost / net for the range, the **daily
+  follower-count curve**, and demographics (age+gender, city, country, in %)
+- **earnings** — total USD with delta, daily series, breakdown by program
+  (e.g. subscriptions)
+
+Notes:
+
+- Read-only; works on a professional-mode personal profile (no Page needed).
+- Facebook buckets insight days in **US Pacific time**; the last (current) day
+  is a partial bucket, so ignore its dip in the series.
+- These queries are SSR-preloaded by the dashboard, so they never appear as
+  XHR in a network capture — the doc_ids came out of the page HTML's
+  `preloaderID`/`queryID` entries (see `scripts/fb_config.py`).
+
 ### Comments
 
 ```bash

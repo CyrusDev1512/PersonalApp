@@ -38,6 +38,25 @@ CONTENT_LIBRARY_PAGE_DOC_ID = "27642268785365896"
 # scheduled. Takes the base64 story id (UzpfS…), not the numeric post id.
 STORY_DELETE_DOC_ID = "27542772888736782"
 
+# ProdashCometV2InsightsViewsQuery — the 洞察報告 Views tab: total views with
+# period-over-period delta, the daily views time series, views split by
+# follower/non-follower and by content type, publishing activity, top content.
+# These insights queries are SSR-preloaded by the dashboard (they never show up
+# as XHR in a network capture); the ids come out of the page HTML's
+# preloaderID/queryID entries. All of them answer as deferred streams — read
+# with graphql_chunks().
+INSIGHTS_VIEWS_DOC_ID = "26523101127284782"
+
+# ProdashCometV2InsightsAudienceQuery — the Audience tab: follower total,
+# new/lost/net followers for the range, the daily follower-count series, and
+# follower demographics (city / country / age+gender buckets, as percentages).
+INSIGHTS_AUDIENCE_DOC_ID = "27792026520453230"
+
+# ProdashCometV2InsightsEarningsOverviewQuery — the Earnings tab: total
+# earnings (USD) with delta, daily series, and breakdown by program type
+# (e.g. subscriptions).
+INSIGHTS_EARNINGS_DOC_ID = "34651846401127144"
+
 # base64('privacy_scope_renderer:{"id":8787670733}') — the timeline composer's
 # privacy scope, taken verbatim from the web client's own request.
 PRIVACY_WRITE_ID = "cHJpdmFjeV9zY29wZV9yZW5kZXJlcjp7ImlkIjo4Nzg3NjcwNzMzfQ"

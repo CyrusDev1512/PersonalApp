@@ -892,3 +892,144 @@ def upload_photo(session, tokens, actor_id, image_path: str) -> str:
     size_kb = len(blob) // 1024
     print(f"  photo uploaded: {os.path.basename(image_path)} ({size_kb} KB) -> {photo_id}")
     return photo_id
+
+
+# ── Profile insights (洞察報告) ──────────────────────────────────────────────
+
+def _metric(node) -> dict:
+    """Flatten a Tofu single-value metric into {value, delta_pct}."""
+    if not isinstance(node, dict):
+        return {}
+    out = {}
+    if node.get("value") is not None:
+        out["value"] = node["value"]
+    delta = node.get("delta")
+    if isinstance(delta, dict) and delta.get("percentage") is not None:
+        out["delta_pct"] = delta["percentage"]
+    return out
+
+
+def _time_series(node) -> list[dict]:
+    """Flatten a Tofu time series into [{date, value}].
+
+    Facebook buckets insight days in US Pacific time, so a "date" here is a
+    Pacific day (Taipei readers: the bucket covers 15:00/16:00 that day to the
+    next). Trends read fine; do not treat a single day as a Taipei calendar day.
+    """
+    points = (node or {}).get("points") or []
+    return [
+        {"date": (p.get("start_time") or "")[:10], "value": p.get("value")}
+        for p in points
+        if isinstance(p, dict)
+    ]
+
+
+def _breakdown(node) -> list[dict]:
+    """Flatten Tofu breakdown buckets into [{name, value}] (values are %)."""
+    buckets = (node or {}).get("bucket_values") or []
+    return [
+        {
+            "name": " / ".join(str(n) for n in (b.get("bucket_names") or [])),
+            "value": b.get("bucket_value"),
+        }
+        for b in buckets
+        if isinstance(b, dict)
+    ]
+
+
+def _find_in_chunks(chunks, key):
+    for chunk in chunks:
+        found = _find_key(chunk, key)
+        if found is not None:
+            return found
+    return None
+
+
+def fetch_insights(session, tokens, actor_id, page_id, start: str, end: str,
+                   sections=("views", "audience", "earnings")) -> dict:
+    """Read the Professional Dashboard 洞察報告 for an ISO date range.
+
+    Pure GraphQL, read-only. `page_id` is the dashboard's own page id (from
+    fetch_page_id), NOT the c_user id. Returns a dict with one key per section;
+    a section whose query fails is returned as {} rather than aborting the rest.
+    """
+    from scripts.fb_config import (
+        INSIGHTS_AUDIENCE_DOC_ID,
+        INSIGHTS_EARNINGS_DOC_ID,
+        INSIGHTS_VIEWS_DOC_ID,
+    )
+
+    time_range = {"start_iso_date": start, "end_iso_date": end, "type": "CUSTOM"}
+    queries = {
+        "views": (
+            INSIGHTS_VIEWS_DOC_ID, "ProdashCometV2InsightsViewsQuery",
+            {
+                "customStartDate": start, "customEndDate": end,
+                "dateRange": "CUSTOM", "pageID": page_id, "ref": None,
+                "tofuMetricsTimeRange": time_range,
+            },
+        ),
+        "audience": (
+            INSIGHTS_AUDIENCE_DOC_ID, "ProdashCometV2InsightsAudienceQuery",
+            {"pageID": page_id, "ref": None, "timeRange": time_range},
+        ),
+        "earnings": (
+            INSIGHTS_EARNINGS_DOC_ID, "ProdashCometV2InsightsEarningsOverviewQuery",
+            {
+                "customStartDate": start, "customEndDate": end,
+                "dateRange": "CUSTOM", "insights_redesign_gk": True,
+                "isMonetizationEnabled": True, "pageID": page_id, "ref": None,
+                "timeRange": time_range,
+            },
+        ),
+    }
+
+    result = {}
+    for section in sections:
+        doc_id, friendly, variables = queries[section]
+        try:
+            chunks = graphql_chunks(session, tokens, actor_id, doc_id, friendly, variables)
+        except Exception as exc:  # keep the other sections usable
+            print(f"Warning: {section} insights query failed: {exc}", file=sys.stderr)
+            result[section] = {}
+            continue
+        find = lambda key: _find_in_chunks(chunks, key)  # noqa: E731
+        if section == "views":
+            by_type = _breakdown(
+                find("view_breakdowns_by_content_type_and_follower_nonfollower"))
+            # The second bucket name is a follow-status code: 1=follower,
+            # 2=non-follower (per-code sums match the overall follower /
+            # non-follower split).
+            for bucket in by_type:
+                bucket["name"] = (
+                    bucket["name"]
+                    .replace(" / 1", " (follower)")
+                    .replace(" / 2", " (non-follower)")
+                )
+            result[section] = {
+                "views": _metric(find("views")),
+                "views_daily": _time_series(find("views_time_series")),
+                "posts_published_daily": _time_series(
+                    find("publishing_activity_time_series")),
+                "views_by_follow_status": _breakdown(
+                    find("view_breakdowns_by_follower_nonfollower")),
+                "views_by_content_type": by_type,
+            }
+        elif section == "audience":
+            result[section] = {
+                "followers_total": _metric(find("total_follower")),
+                "followers_new": _metric(find("new_follower")),
+                "followers_lost": _metric(find("unfollower")),
+                "followers_net": _metric(find("net_follower")),
+                "followers_daily": _time_series(find("followers_time_series")),
+                "followers_by_city": _breakdown(find("followers_by_city")),
+                "followers_by_country": _breakdown(find("followers_by_country")),
+                "followers_by_age_gender": _breakdown(find("followers_by_age_gender")),
+            }
+        elif section == "earnings":
+            result[section] = {
+                "earnings_usd": _metric(find("total_earnings")),
+                "earnings_daily": _time_series(find("earnings_time_series")),
+                "earnings_by_program": _breakdown(find("earnings_by_program_type")),
+            }
+    return result

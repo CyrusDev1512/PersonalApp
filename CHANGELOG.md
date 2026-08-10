@@ -5,6 +5,35 @@ Originally forked from [htlin222/fbpost](https://github.com/htlin222/fbpost);
 maintained standalone since 2026-07-30 (upstream inactive since March 2026,
 PRs #1/#2 closed unmerged). MIT license and original copyright retained.
 
+## [0.8.0] - 2026-08-10
+
+### Added
+
+- **`fb insights` — profile insights (洞察報告) via pure GraphQL.** Covers what
+  the CSV export never had: total views with period-over-period delta and the
+  daily views series, follower vs non-follower and content-type splits,
+  follower total plus new/lost/net for any custom date range, the daily
+  follower-count curve, follower demographics (age+gender / city / country),
+  and earnings (total USD, daily series, per-program breakdown).
+  `--days N` / `--start`+`--end` pick the range, `--section` narrows to one
+  tab, `--daily` prints the time series, `--json` dumps the full structure.
+- Read-only, no Page required — works on a professional-mode personal profile.
+
+### Notes
+
+- The Insights queries are SSR-preloaded by the dashboard and never appear as
+  XHR, so the doc_ids were extracted from the page HTML's
+  `preloaderID`/`queryID` entries rather than a network capture.
+- Facebook buckets insight days in US Pacific time; the current day is a
+  partial bucket.
+- Earnings breakdown buckets carry USD amounts while every other breakdown is
+  percentages — the CLI prints them accordingly.
+
+Verified live: 28d and 90d ranges, all three sections, against the dashboard's
+own numbers.
+
+---
+
 ## [0.7.3] - 2026-08-09
 
 ### Fixed

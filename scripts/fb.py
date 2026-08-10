@@ -767,6 +767,97 @@ def cmd_report(args):
     ))
 
 
+def _fmt_delta(metric: dict) -> str:
+    pct = metric.get("delta_pct")
+    if pct is None:
+        return ""
+    return f" ({pct:+.1f}% vs previous period)"
+
+
+def _print_breakdown(label: str, buckets: list, top: int = 6, unit: str = "%"):
+    # Breakdown bucket values are percentages everywhere except earnings,
+    # where they are the USD amount per program.
+    rows = [b for b in buckets if b.get("value")]
+    if not rows:
+        return
+    rows.sort(key=lambda b: -(b["value"] or 0))
+    if unit == "USD":
+        parts = ", ".join(f"{b['name']} US${b['value']:,.2f}" for b in rows[:top])
+    else:
+        parts = ", ".join(f"{b['name']} {b['value']:.1f}%" for b in rows[:top])
+    print(f"  {label}: {parts}")
+
+
+def _print_series(series: list, unit: str = ""):
+    for point in series:
+        value = point.get("value")
+        text = f"{value:,}" if isinstance(value, int) else str(value)
+        print(f"    {point.get('date')}  {text}{unit}")
+
+
+def cmd_insights(args):
+    """Print the Professional Dashboard 洞察報告 (views / audience / earnings)."""
+    from scripts.fb_session import fetch_insights
+
+    end = args.end or datetime.now().strftime("%Y-%m-%d")
+    if args.start:
+        start = args.start
+    else:
+        end_dt = datetime.strptime(end, "%Y-%m-%d")
+        start = (end_dt - timedelta(days=args.days - 1)).strftime("%Y-%m-%d")
+
+    cookies = load_cookies(args.profile)
+    actor_id = cookies["actor_id"]
+    session = create_session(cookies)
+    tokens = fetch_tokens(session)
+    page_id = args.page or fetch_page_id(session)
+
+    sections = ("views", "audience", "earnings") if args.section == "all" else (args.section,)
+    data = fetch_insights(session, tokens, actor_id, page_id, start, end, sections)
+
+    if args.json:
+        payload = {"start": start, "end": end, "page_id": page_id, **data}
+        with open(args.json, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=1)
+        print(f"Saved: {args.json}")
+
+    print(f"Insights {start} → {end}  (FB buckets days in US Pacific time)")
+
+    views = data.get("views") or {}
+    if views:
+        total = views.get("views", {})
+        print(f"\n■ Views: {total.get('value', 0):,}{_fmt_delta(total)}")
+        _print_breakdown("By follow status", views.get("views_by_follow_status", []))
+        _print_breakdown("By content type", views.get("views_by_content_type", []))
+        if args.daily:
+            print("  Daily views:")
+            _print_series(views.get("views_daily", []))
+
+    audience = data.get("audience") or {}
+    if audience:
+        total = audience.get("followers_total", {})
+        new = audience.get("followers_new", {}).get("value", 0)
+        lost = audience.get("followers_lost", {}).get("value", 0)
+        net = audience.get("followers_net", {}).get("value", 0)
+        print(f"\n■ Followers: {total.get('value', 0):,}"
+              f"  (+{new:,} new, -{lost:,} lost, net {net:+,} this period)")
+        _print_breakdown("By age", audience.get("followers_by_age_gender", []))
+        _print_breakdown("By city", audience.get("followers_by_city", []))
+        _print_breakdown("By country", audience.get("followers_by_country", []))
+        if args.daily:
+            print("  Daily follower count:")
+            _print_series(audience.get("followers_daily", []))
+
+    earnings = data.get("earnings") or {}
+    if earnings:
+        total = earnings.get("earnings_usd", {})
+        print(f"\n■ Earnings: US${total.get('value', 0):,.2f}{_fmt_delta(total)}")
+        _print_breakdown("By program", earnings.get("earnings_by_program", []), unit="USD")
+        if args.daily:
+            print("  Daily earnings (USD):")
+            _print_series(earnings.get("earnings_daily", []))
+
+
 def cmd_comments(args):
     """List unreplied comments from Professional Dashboard."""
     cookies = load_cookies(args.profile)
@@ -1324,6 +1415,28 @@ def main():
     )
     report_parser.add_argument("--no-headless", action="store_true", help="Show the browser")
 
+    # insights (read-only)
+    insights_parser = subparsers.add_parser(
+        "insights",
+        help="Profile insights: views, followers (+demographics), earnings",
+    )
+    insights_parser.add_argument(
+        "--days", type=int, default=28,
+        help="Range length ending today (default: 28)",
+    )
+    insights_parser.add_argument("--start", help="Range start YYYY-MM-DD (overrides --days)")
+    insights_parser.add_argument("--end", help="Range end YYYY-MM-DD (default: today)")
+    insights_parser.add_argument(
+        "--section", choices=["all", "views", "audience", "earnings"], default="all",
+        help="Which section to fetch (default: all)",
+    )
+    insights_parser.add_argument(
+        "--daily", action="store_true",
+        help="Also print the daily time series for each section",
+    )
+    insights_parser.add_argument("--json", help="Write the full structured data to this path")
+    insights_parser.add_argument("--page", help="Dashboard page id (default: auto-detected)")
+
     # reply
     reply_parser = subparsers.add_parser("reply", help="Reply to a comment")
     reply_parser.add_argument("id", help="Comment index (from 'comments' list) or base64 comment ID")
@@ -1398,6 +1511,8 @@ def main():
         cmd_comment(args)
     elif args.command == "comments":
         cmd_comments(args)
+    elif args.command == "insights":
+        cmd_insights(args)
     elif args.command == "reply":
         cmd_reply(args)
     elif args.command == "login":
