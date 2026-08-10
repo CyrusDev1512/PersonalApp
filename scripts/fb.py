@@ -950,6 +950,25 @@ def cmd_snapshot(args):
         layers[f"{days}d"] = fetch_insights(
             session, tokens, actor_id, page_id, start, today)
 
+    # Per-post contribution (Content Library metrics), so each post's
+    # views/engagement gets a history too — the live numbers keep moving.
+    # The deferred stream occasionally answers empty on a first try; retry
+    # rather than silently writing a snapshot with no posts.
+    rows = []
+    for attempt in range(3):
+        rows = fetch_content_library(
+            session, tokens, actor_id, "PUBLISHED",
+            limit=60, date_range="LAST_90D")
+        if rows:
+            break
+        time.sleep(3)
+    posts = [
+        {"post_id": row["post_id"], "created": row["created"],
+         "text": row["text"][:80], "views": row["views"],
+         "engagement": row["engagement"]}
+        for row in rows
+    ]
+
     snap_dir = _snapshot_dir(args.profile)
     previous = sorted(
         f for f in os.listdir(snap_dir)
@@ -959,7 +978,7 @@ def cmd_snapshot(args):
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(
             {"date": today, "page_id": page_id, "subscribers": subs,
-             "insights": layers},
+             "insights": layers, "posts": posts},
             f, ensure_ascii=False, indent=1,
         )
     print(f"Snapshot saved: {out_path}  ({len(subs)} subscribers)")
@@ -978,6 +997,13 @@ def cmd_snapshot(args):
             print(f"  Left since {since}: {', '.join(left)}")
         if not joined and not left:
             print(f"  No membership change since {since}.")
+
+    if not posts:
+        # Snapshot is saved either way; exit nonzero so a scheduled run's
+        # job runner surfaces the gap instead of it passing as success.
+        print("Warning: Content Library returned no posts after 3 attempts — "
+              "snapshot saved without per-post metrics.", file=sys.stderr)
+        sys.exit(2)
 
 
 def cmd_comments(args):

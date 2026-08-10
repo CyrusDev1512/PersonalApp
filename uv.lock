@@ -69,8 +69,8 @@ wheels = [
 ]
 
 [[package]]
-name = "fbpost"
-version = "0.7.3"
+name = "fbkit"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "playwright" },

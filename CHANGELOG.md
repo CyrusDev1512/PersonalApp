@@ -7,6 +7,13 @@ PRs #1/#2 closed unmerged). MIT license and original copyright retained.
 
 ## [0.8.0] - 2026-08-10
 
+### Changed
+
+- **Renamed `fbpost` → `fbkit`.** The tool long ago outgrew posting — it now
+  covers scheduling, comments, Messenger, profile insights, and subscriber
+  tracking. The `fb` command and package layout are unchanged; the old GitHub
+  URL redirects. Origin credits moved to the bottom of the README.
+
 ### Added
 
 - **`fb insights` — profile insights (洞察報告) via pure GraphQL.** Covers what

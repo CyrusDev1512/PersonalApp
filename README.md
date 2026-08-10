@@ -1,22 +1,12 @@
-![Last commit](https://img.shields.io/github/last-commit/drpwchen/fbpost?style=flat-square)
-![License](https://img.shields.io/github/license/drpwchen/fbpost?style=flat-square)
+![Last commit](https://img.shields.io/github/last-commit/drpwchen/fbkit?style=flat-square)
+![License](https://img.shields.io/github/license/drpwchen/fbkit?style=flat-square)
 
-# fbpost
+# fbkit
 
-Facebook CLI tool — post, comments, replies, and Messenger automation via GraphQL API + Playwright.
-
-> **Originally forked from [htlin222/fbpost](https://github.com/htlin222/fbpost)** — all credit for the original design and the GraphQL groundwork goes to [@htlin222](https://github.com/htlin222), and this project stays MIT-licensed with their copyright intact. It is now maintained here as a standalone project, because upstream has been inactive since March 2026. On top of the original it adds:
->
-> - `fb post --image` (photo attachments) and `--schedule` (scheduled posts), both via pure GraphQL
-> - `fb post --comment` / `fb comment` — pre-write a top-level comment on a post, including scheduled posts before they publish ("link in comments")
-> - `fb post-list-scheduled` / `fb post-list-published` / `fb comment-scheduled` / `fb post-delete-scheduled` / `fb post-delete` — list, comment on, and delete your own posts from the CLI, scheduled or already published, all through the Content Library GraphQL API
-> - `fb report` — create and download a Professional Dashboard content data report (CSV) in one command, plus `scripts/report_to_md.py` to turn it into a markdown tracking table
-> - A reliability sweep: daemon-safe teardown everywhere, cookie-based login verification, honest post-send verification (several code paths used to report success without checking), wrong-contact guards in `fb search`, Windows support fixes, and event-driven waits that cut 3-12s of fixed sleeps per command
->
-> The reliability fixes and composer features were offered upstream as
-> [PR #1](https://github.com/htlin222/fbpost/pull/1) and
-> [PR #2](https://github.com/htlin222/fbpost/pull/2); they were closed unmerged
-> in July 2026. Anyone is welcome to take them from here.
+Facebook CLI toolkit — posting, scheduling, comments, Messenger, profile
+insights, and subscriber tracking, all via GraphQL API + Playwright.
+Formerly known as `fbpost`; renamed when it grew past posting
+(origin and credits at the [bottom](#credits--origin)).
 
 ## What this version is like to use
 
@@ -474,3 +464,21 @@ This tool is one piece of my personal AI workflow. If you want to learn how to u
 3. [自動化流程不是設計出來的，是長出來的](https://drpwchen.com/posts/growing-your-workflow/)
 
 Full map of my tools and posts ／ 所有工具與文章的全貌 → [drpwchen.com/map](https://drpwchen.com/map/)
+
+---
+
+## Credits & origin
+
+**Originally forked from [htlin222/fbpost](https://github.com/htlin222/fbpost)** —
+all credit for the original design and the GraphQL groundwork goes to
+[@htlin222](https://github.com/htlin222), and this project stays MIT-licensed
+with their copyright intact. It has been maintained here as a standalone
+project since July 2026 (upstream inactive since March 2026), and renamed
+`fbkit` in August 2026 once it covered far more than posting. On top of the
+original it added photo/scheduled posts via pure GraphQL, link-in-comments,
+Content Library post management, the CSV report exporter, profile insights,
+subscriber tracking, and a reliability sweep (honest send verification,
+wrong-contact guards, daemon-safe teardown). The early fixes were offered
+upstream as [PR #1](https://github.com/htlin222/fbpost/pull/1) and
+[PR #2](https://github.com/htlin222/fbpost/pull/2); they were closed unmerged
+in July 2026 — anyone is welcome to take them from here.
