@@ -17,6 +17,10 @@ PRs #1/#2 closed unmerged). MIT license and original copyright retained.
   and earnings (total USD, daily series, per-program breakdown).
   `--days N` / `--start`+`--end` pick the range, `--section` narrows to one
   tab, `--daily` prints the time series, `--json` dumps the full structure.
+- **`--section subscriptions`** — current subscriber count, subscribers
+  gained/canceled within the range, and the subscription program's earnings,
+  from the Monetization › Subscriptions management page's query
+  (`ProdashCometV2SubscriptionsManagementQuery`).
 - Read-only, no Page required — works on a professional-mode personal profile.
 
 ### Notes

@@ -271,6 +271,8 @@ What you get per section:
   follower-count curve**, and demographics (age+gender, city, country, in %)
 - **earnings** — total USD with delta, daily series, breakdown by program
   (e.g. subscriptions)
+- **subscriptions** — current subscriber count, gained / canceled within the
+  range, and the subscription program's earnings
 
 Notes:
 

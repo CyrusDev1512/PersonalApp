@@ -57,6 +57,11 @@ INSIGHTS_AUDIENCE_DOC_ID = "27792026520453230"
 # (e.g. subscriptions).
 INSIGHTS_EARNINGS_DOC_ID = "34651846401127144"
 
+# ProdashCometV2SubscriptionsManagementQuery — the Monetization › Subscriptions
+# management page: current subscriber count, gained/canceled for the range, and
+# the program's earnings. Same SSR-preload situation as the insights queries.
+INSIGHTS_SUBSCRIPTIONS_DOC_ID = "27271010619228280"
+
 # base64('privacy_scope_renderer:{"id":8787670733}') — the timeline composer's
 # privacy scope, taken verbatim from the web client's own request.
 PRIVACY_WRITE_ID = "cHJpdmFjeV9zY29wZV9yZW5kZXJlcjp7ImlkIjo4Nzg3NjcwNzMzfQ"

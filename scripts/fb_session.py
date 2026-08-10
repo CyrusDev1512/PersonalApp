@@ -946,7 +946,7 @@ def _find_in_chunks(chunks, key):
 
 
 def fetch_insights(session, tokens, actor_id, page_id, start: str, end: str,
-                   sections=("views", "audience", "earnings")) -> dict:
+                   sections=("views", "audience", "earnings", "subscriptions")) -> dict:
     """Read the Professional Dashboard 洞察報告 for an ISO date range.
 
     Pure GraphQL, read-only. `page_id` is the dashboard's own page id (from
@@ -956,6 +956,7 @@ def fetch_insights(session, tokens, actor_id, page_id, start: str, end: str,
     from scripts.fb_config import (
         INSIGHTS_AUDIENCE_DOC_ID,
         INSIGHTS_EARNINGS_DOC_ID,
+        INSIGHTS_SUBSCRIPTIONS_DOC_ID,
         INSIGHTS_VIEWS_DOC_ID,
     )
 
@@ -980,6 +981,16 @@ def fetch_insights(session, tokens, actor_id, page_id, start: str, end: str,
                 "dateRange": "CUSTOM", "insights_redesign_gk": True,
                 "isMonetizationEnabled": True, "pageID": page_id, "ref": None,
                 "timeRange": time_range,
+            },
+        ),
+        "subscriptions": (
+            INSIGHTS_SUBSCRIPTIONS_DOC_ID, "ProdashCometV2SubscriptionsManagementQuery",
+            {
+                "callerID": "PRODASH_WEB_MONETIZATION_MANAGEMENT_PAGE",
+                "defaultTimeRange": time_range,
+                "feedLocation": "PROFESSIONAL_DASHBOARD",
+                "pageID": page_id, "ref": None, "scale": 2,
+                "useDefaultActor": False,
             },
         ),
     }
@@ -1031,5 +1042,15 @@ def fetch_insights(session, tokens, actor_id, page_id, start: str, end: str,
                 "earnings_usd": _metric(find("total_earnings")),
                 "earnings_daily": _time_series(find("earnings_time_series")),
                 "earnings_by_program": _breakdown(find("earnings_by_program_type")),
+            }
+        elif section == "subscriptions":
+            # subscribers_value is the CURRENT subscriber count (not bound to
+            # the range); gained/canceled are within the range.
+            result[section] = {
+                "subscribers": _metric(find("subscribers_value")),
+                "subscribers_gained": _metric(find("subscribers_gained_value")),
+                "subscribers_canceled": _metric(find("subscribers_canceled_value")),
+                "program_earnings_usd": _metric(
+                    (find("profile_earnings") or {}).get("query_result")),
             }
     return result

@@ -812,7 +812,10 @@ def cmd_insights(args):
     tokens = fetch_tokens(session)
     page_id = args.page or fetch_page_id(session)
 
-    sections = ("views", "audience", "earnings") if args.section == "all" else (args.section,)
+    sections = (
+        ("views", "audience", "earnings", "subscriptions")
+        if args.section == "all" else (args.section,)
+    )
     data = fetch_insights(session, tokens, actor_id, page_id, start, end, sections)
 
     if args.json:
@@ -856,6 +859,18 @@ def cmd_insights(args):
         if args.daily:
             print("  Daily earnings (USD):")
             _print_series(earnings.get("earnings_daily", []))
+
+    subs = data.get("subscriptions") or {}
+    if subs:
+        total = subs.get("subscribers", {})
+        gained = subs.get("subscribers_gained", {}).get("value", 0)
+        canceled = subs.get("subscribers_canceled", {}).get("value", 0)
+        program = subs.get("program_earnings_usd", {}).get("value")
+        line = (f"\n■ Subscribers: {total.get('value', 0):,} now"
+                f"  (+{gained:,} gained, -{canceled:,} canceled this period)")
+        if program is not None:
+            line += f"  earnings US${program:,.2f}"
+        print(line)
 
 
 def cmd_comments(args):
@@ -1427,7 +1442,8 @@ def main():
     insights_parser.add_argument("--start", help="Range start YYYY-MM-DD (overrides --days)")
     insights_parser.add_argument("--end", help="Range end YYYY-MM-DD (default: today)")
     insights_parser.add_argument(
-        "--section", choices=["all", "views", "audience", "earnings"], default="all",
+        "--section", choices=["all", "views", "audience", "earnings", "subscriptions"],
+        default="all",
         help="Which section to fetch (default: all)",
     )
     insights_parser.add_argument(
