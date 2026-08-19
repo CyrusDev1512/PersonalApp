@@ -303,10 +303,17 @@ def cmd_post(args):
                 file=sys.stderr,
             )
             sys.exit(1)
+        if len(args.image) > 1:
+            print(
+                "Error: --composer attaches one image only. Drop --composer to "
+                "use the GraphQL path, which handles multi-photo posts.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         from scripts.fb_browser import post_via_composer
         asyncio.run(post_via_composer(
             args.profile, args.text,
-            image_path=args.image,
+            image_path=args.image[0],
             schedule_at=args.schedule,
             privacy=args.privacy,
             headless=args.headless,
@@ -338,12 +345,15 @@ def cmd_post(args):
         print(f"  audience: {args.privacy} -> {json.dumps(privacy_row)}")
 
     # A photo is uploaded first and referenced by id — same two-step the
-    # composer does, minus the browser.
+    # composer does, minus the browser. Several photos = several attachments,
+    # in the order the flags were passed.
     attachments = []
     if args.image:
-        print("\nUploading photo...")
-        photo_id = upload_photo(session, tokens, actor_id, args.image)
-        attachments = [{"photo": {"id": photo_id}}]
+        n = len(args.image)
+        print(f"\nUploading {n} photo{'s' if n > 1 else ''}...")
+        for path in args.image:
+            photo_id = upload_photo(session, tokens, actor_id, path)
+            attachments.append({"photo": {"id": photo_id}})
 
     session_id = str(uuid.uuid4())
     variables = {
@@ -1400,7 +1410,10 @@ def main():
         "SUBSCRIBERS post from a logged-out browser instead.",
     )
     post_parser.add_argument(
-        "--image", help="Path to an image to attach (uploaded via the API, then referenced by the post)",
+        "--image", action="append", metavar="PATH",
+        help="Path to an image to attach (uploaded via the API, then referenced "
+             "by the post). Repeat the flag for a multi-photo post; the order "
+             "you pass them in is the order Facebook shows them.",
     )
     post_parser.add_argument(
         "--schedule",

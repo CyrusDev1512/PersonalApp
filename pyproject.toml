@@ -1,6 +1,6 @@
 [project]
 name = "fbkit"
-version = "0.8.0"
+version = "0.9.0"
 description = "Facebook CLI tool — post, list comments, reply to comments"
 readme = "README.md"
 requires-python = ">=3.12"

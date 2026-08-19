@@ -5,6 +5,25 @@ Originally forked from [htlin222/fbpost](https://github.com/htlin222/fbpost);
 maintained standalone since 2026-07-30 (upstream inactive since March 2026,
 PRs #1/#2 closed unmerged). MIT license and original copyright retained.
 
+## [0.9.0] - 2026-08-20
+
+### Added
+
+- **Multi-photo posts.** `--image` is now repeatable — pass it once per photo
+  and they are uploaded in order and attached to the same post
+  (`fb post "text" --image a.png --image b.png ...`). Works with `--schedule`
+  and `--comment`, since photos already went through the GraphQL path.
+  Single `--image` behaves exactly as before.
+- `--composer` now refuses more than one image up front instead of silently
+  attaching the first, and says which flag to drop.
+
+### Known limitation
+
+- Nothing in the CLI can read back a *scheduled* post's attachments, so a
+  multi-photo schedule is verified only by the upload log (one photoID per
+  file) plus the mutation's success. To see the photos before they publish,
+  open the post in the Professional Dashboard's Content Library.
+
 ## [0.8.0] - 2026-08-10
 
 ### Changed
