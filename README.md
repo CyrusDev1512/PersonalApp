@@ -326,7 +326,13 @@ Opens a headed browser for manual login. Cookies and storage state are saved aut
 uv run fb send Alice "Hello!"              # by contact name (from cache)
 uv run fb send 1234567890123456 "Hello!"   # by thread ID
 uv run fb send Alice "Hello!" --headless   # hidden browser (less reliable for E2E)
+uv run fb send Alice "$(printf 'line 1\nline 2')" --file deck.pptx --file deck.pdf   # multi-line text + attachments
 ```
+
+Newlines in the text become line breaks (Shift+Enter), not separate sends. `--file`
+is repeatable; each file must show up in the composer preview before anything is
+sent, and success means a new file link with that name appears in the thread
+(large E2EE uploads can take minutes).
 
 Send defaults to **headed mode** (visible browser) for reliable E2E encryption handling. The flow:
 1. Navigate to E2E thread

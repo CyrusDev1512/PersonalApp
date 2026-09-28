@@ -99,6 +99,14 @@ sandbox.
   download="<filename>">` — decrypted in the page, no URL to fetch from outside.
   `fb read <id> --count N --save-attachments DIR` reads each blob in the page
   and saves it (size-checked). Do not open a browser by hand for this.
+- Sending files: `fb send <id> "text" --file a.pptx --file a.pdf`. Facts the
+  code relies on: the composer box is the textbox's 4th ancestor (attachment
+  preview = element with `aria-label` = filename, plus 「移除附件」); the
+  enclosing `[role=region]` can wrap the whole conversation, so never scope
+  composer checks to it. The attach button label states the size limit
+  (「附加最大25 MB 的檔案」regular, 100 MB E2EE) — a regular self-thread cannot
+  rehearse a >25 MB E2EE send. After attaching, page-level keyboard input no
+  longer reaches the textbox; type with element-targeted calls.
 
 ## Capturing a new mutation (how the GraphQL paths were built)
 

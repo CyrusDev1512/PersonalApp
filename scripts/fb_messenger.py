@@ -229,8 +229,49 @@ async def verify_contacts(profile: str, count: int = 20, headless: bool = True):
         await _teardown(p, browser, context, page)
 
 
-async def send_message(profile: str, thread_id: str, text: str, headless: bool = True):
-    """Send a message to a Messenger thread."""
+def _squash(s: str) -> str:
+    """Whitespace-insensitive form for comparing composer text (Lexical adds/drops newlines)."""
+    return re.sub(r"\s+", "", s or "")
+
+
+# The composer box = 4 levels above the textbox: holds the attachment preview
+# (aria-label = filename, plus "移除附件") and nothing of the conversation. The
+# enclosing [role=region] is NOT usable — on some threads it wraps the whole
+# conversation, which hid every sent file from the check below.
+_COMPOSER_JS = """() => { let c = document.querySelector('[contenteditable="true"][role="textbox"]');
+    for (let k = 0; k < 4 && c; k++) c = c.parentElement; return c; }"""
+
+
+async def _preview_has(page, name: str) -> bool:
+    """True when the composer's attachment preview lists this filename."""
+    return await page.evaluate(
+        f"""n => {{ const c = ({_COMPOSER_JS})(); if (!c) return false;
+            return [...c.querySelectorAll('[aria-label]')].some(x => x.getAttribute('aria-label') === n)
+                   || c.innerText.includes(n); }}""",
+        name,
+    )
+
+
+async def _count_sent_file(page, name: str) -> int:
+    """Count sent-file links with this name in the conversation (not the composer preview).
+
+    E2EE threads: <a href="blob:…" download="name">. Regular threads:
+    <a href="https://cdn.fbsbx.com/…"> whose text is "name" + size, no download attr.
+    """
+    return await page.evaluate(
+        f"""n => {{ const c = ({_COMPOSER_JS})();
+            return [...document.querySelectorAll('div[role="main"] a[href]')]
+              .filter(a => (a.getAttribute('download') === n
+                            || (/fbsbx\\.com/.test(a.href) && a.textContent.trim().startsWith(n)))
+                       && !(c && c.contains(a)))
+              .length; }}""",
+        name,
+    )
+
+
+async def send_message(profile: str, thread_id: str, text: str, headless: bool = True,
+                       files: list[str] | None = None):
+    """Send a message (optionally with file attachments) to a Messenger thread."""
     is_daemon = False
     p, browser, context = await create_browser_context(profile, headless, persistent=False)
 
@@ -324,11 +365,69 @@ async def send_message(profile: str, thread_id: str, text: str, headless: bool =
             print(f"ABORT: wrong thread! Expected {thread_id}, got {page.url}", file=sys.stderr)
             sys.exit(1)
 
+        # Attach files first: the composer's own file input (the one in the
+        # region that holds the textbox), then wait for each filename to show
+        # up in the attachment preview before typing.
+        names = [os.path.basename(f) for f in files or []]
+        sent_before = {}
+        if files:
+            for f in files:
+                if not os.path.isfile(f):
+                    print(f"FAILED: file not found: {f}", file=sys.stderr)
+                    sys.exit(1)
+            composer = page.locator(
+                '[role="region"]:has([contenteditable="true"][role="textbox"])'
+            ).first
+            # The attach button states the thread's limit ("附加最大25 MB 的檔案" on
+            # regular threads, 100 MB on E2EE). An oversize file is silently
+            # dropped by Messenger, so refuse it up front.
+            label = await composer.evaluate(
+                """el => [...el.querySelectorAll('[aria-label]')].map(x => x.getAttribute('aria-label'))
+                    .find(t => /(\\d+)\\s*MB/i.test(t)) || ''"""
+            )
+            m = re.search(r"(\d+)\s*MB", label or "", re.I)
+            if m:
+                limit = int(m.group(1)) * 1024 * 1024
+                for f in files:
+                    if os.path.getsize(f) > limit:
+                        print(f"FAILED: {os.path.basename(f)} is {os.path.getsize(f) / 1048576:.1f} MB; "
+                              f"this thread accepts up to {m.group(1)} MB. Nothing sent.", file=sys.stderr)
+                        sys.exit(1)
+            for n in names:
+                sent_before[n] = await _count_sent_file(page, n)
+            await composer.locator('input[type="file"]').first.set_input_files(
+                [os.path.abspath(f) for f in files]
+            )
+            for n in names:
+                try:
+                    for _ in range(60):
+                        if await _preview_has(page, n):
+                            break
+                        await page.wait_for_timeout(1000)
+                    else:
+                        raise TimeoutError
+                except Exception:
+                    print(f"FAILED: attachment preview for {n} never appeared. Nothing sent.",
+                          file=sys.stderr)
+                    sys.exit(1)
+                print(f"  attached: {n}")
+
         # PRE-SEND: fill text and verify it's in the input before pressing Enter
         await input_box.click(force=True)
         await page.wait_for_timeout(500)
 
-        await input_box.fill(text)
+        multiline = "\n" in text
+        if multiline:
+            # Enter sends in Messenger; lines are joined with Shift+Enter.
+            # Element-targeted calls: after attaching a file, page-level keyboard
+            # input no longer lands in the textbox.
+            for k, line in enumerate(text.split("\n")):
+                if k:
+                    await input_box.press("Shift+Enter")
+                if line:
+                    await input_box.press_sequentially(line, delay=10)
+        else:
+            await input_box.fill(text)
         await page.wait_for_timeout(300)
 
         try:
@@ -336,7 +435,12 @@ async def send_message(profile: str, thread_id: str, text: str, headless: bool =
         except Exception:
             input_text = ""
 
-        if text not in input_text:
+        if multiline:
+            if _squash(text) != _squash(input_text):
+                print("FAILED: multi-line text not in input box as typed. Aborting send.\n"
+                      f"  expected: {text!r}\n  in box:   {input_text!r}", file=sys.stderr)
+                sys.exit(1)
+        elif text not in input_text:
             print("  fill() failed, falling back to type()...")
             await input_box.click(force=True)
             # ControlOrMeta = Cmd on macOS, Ctrl elsewhere — a literal Meta+a
@@ -353,7 +457,7 @@ async def send_message(profile: str, thread_id: str, text: str, headless: bool =
             except Exception:
                 input_text = ""
 
-        if text not in input_text:
+        if not multiline and text not in input_text:
             print("FAILED: text not in input box. Aborting send.", file=sys.stderr)
             sys.exit(1)
 
@@ -381,7 +485,7 @@ async def send_message(profile: str, thread_id: str, text: str, headless: bool =
             # did the message text appear in the conversation?
             try:
                 await page.locator('div[role="main"]').get_by_text(
-                    text[:30], exact=False
+                    text.split("\n")[0][:30], exact=False
                 ).last.wait_for(state="visible", timeout=5000)
                 remaining = ""
             except Exception:
@@ -393,11 +497,25 @@ async def send_message(profile: str, thread_id: str, text: str, headless: bool =
                 )
                 sys.exit(1)
 
-        if text in remaining:
+        if _squash(text) and _squash(text) in _squash(remaining):
             print("FAILED: input box still contains the text after Enter — message was NOT sent.", file=sys.stderr)
             sys.exit(1)
 
-        print(f"Message sent: \"{text[:50]}{'...' if len(text) > 50 else ''}\"")
+        # Files: success = a new sent-file link with that name in the thread.
+        # Large E2EE uploads take a while; the link appears once it is done.
+        for n in names:
+            for _ in range(120):
+                if await _count_sent_file(page, n) > sent_before[n]:
+                    print(f"  file sent: {n}")
+                    break
+                await page.wait_for_timeout(2500)
+            else:
+                print(f"WARNING: {n} not seen in the thread after 5 minutes. The text went out; "
+                      "check Messenger before re-sending the file.", file=sys.stderr)
+                sys.exit(1)
+
+        first = text.split("\n")[0]
+        print(f"Message sent: \"{first[:50]}{'...' if len(text) > len(first[:50]) else ''}\"")
 
 
 

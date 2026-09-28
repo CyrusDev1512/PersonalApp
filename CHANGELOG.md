@@ -5,6 +5,32 @@ Originally forked from [htlin222/fbpost](https://github.com/htlin222/fbpost);
 maintained standalone since 2026-07-30 (upstream inactive since March 2026,
 PRs #1/#2 closed unmerged). MIT license and original copyright retained.
 
+## [0.11.0] - 2026-09-29
+
+### Added
+
+- **`fb send --file PATH`** (repeatable) attaches files to a Messenger message
+  through the composer's own file input. Nothing is sent until every filename
+  shows up in the attachment preview; after Enter, success requires a new
+  file link with that name in the thread (E2EE `blob:` link with `download`,
+  or a `cdn.fbsbx.com` link on regular threads), polled for up to 5 minutes.
+- **Size limit check before attaching.** Messenger silently drops a file over
+  the thread's limit, which the attach button states (25 MB on regular
+  threads, 100 MB on E2EE). `fb send` reads that label and refuses an
+  oversize file up front instead of waiting for a preview that never comes.
+- **Multi-line `fb send` text**: newlines are typed as Shift+Enter instead of
+  sending the message line by line.
+
+### Known limitation
+
+- Verified live end to end on a regular (non-E2EE) thread: multi-line text,
+  preview check, send, sent-file check. On E2EE threads the sent-file check
+  relies on the `download` attribute seen on *received* files and is not yet
+  verified for sent ones; if it does not match, the command exits 1 with a
+  "not seen" warning even though the file may have gone out.
+- `fb read --save-attachments` can miss a large attachment that has not
+  finished decrypting when the scan runs (a 50 MB pptx was skipped once).
+
 ## [0.10.0] - 2026-09-28
 
 ### Added

@@ -1328,7 +1328,7 @@ def cmd_send(args):
     from scripts.fb_messenger import send_message, resolve_thread_id
     thread_id, _ = resolve_thread_id(args.profile, args.thread_id)
     headless = args.headless
-    asyncio.run(send_message(args.profile, thread_id, args.text, headless))
+    asyncio.run(send_message(args.profile, thread_id, args.text, headless, files=args.file))
 
 
 def cmd_inbox(args):
@@ -1625,7 +1625,9 @@ def main():
     # send
     send_parser = subparsers.add_parser("send", help="Send a Messenger message")
     send_parser.add_argument("thread_id", help="Thread ID or contact name (from cache)")
-    send_parser.add_argument("text", help="Message text")
+    send_parser.add_argument("text", help="Message text (newlines become line breaks, not separate sends)")
+    send_parser.add_argument("--file", action="append", metavar="PATH",
+                             help="Attach a file (repeatable); sent together with the text")
     send_parser.add_argument("--headless", action="store_true", help="Run in headless mode (hidden browser)")
 
     # inbox
