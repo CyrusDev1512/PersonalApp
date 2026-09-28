@@ -5,6 +5,18 @@ Originally forked from [htlin222/fbpost](https://github.com/htlin222/fbpost);
 maintained standalone since 2026-07-30 (upstream inactive since March 2026,
 PRs #1/#2 closed unmerged). MIT license and original copyright retained.
 
+## [0.10.0] - 2026-09-28
+
+### Added
+
+- **`fb read --save-attachments DIR`** saves the file attachments (pptx, pdf,
+  …) in the loaded messages. E2EE attachments are decrypted in the page and
+  only exist as `blob:` links, so the blob is read inside the page and pulled
+  back in base64 chunks; the saved size is checked against the blob size and
+  the filename comes from the link's `download` attribute. Only attachments
+  within `--count` are in the DOM. Non-E2EE (https) file links are not handled
+  yet.
+
 ## [0.9.0] - 2026-08-20
 
 ### Added

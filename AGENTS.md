@@ -91,8 +91,14 @@ sandbox.
   column; fix should consult inbox/contacts instead of digit count). E2EE
   `--count` is not "latest N" — above ~42 the restore window drifts into old
   history; read recent threads with `--count ≤ 42` and stitch several runs to go
-  further back. E2EE image attachments are base64 `data:` URIs in
+  further back. The drift can start well below 42 (a thread with years of
+  history drifted at `--count 30`); if the newest message looks old, retry
+  with `--count 10`. E2EE image attachments are base64 `data:` URIs in
   `div[role=main] img`, not fbcdn URLs; `fb read` does not save them.
+- E2EE *file* attachments (pptx, pdf, …) are `<a href="blob:…"
+  download="<filename>">` — decrypted in the page, no URL to fetch from outside.
+  `fb read <id> --count N --save-attachments DIR` reads each blob in the page
+  and saves it (size-checked). Do not open a browser by hand for this.
 
 ## Capturing a new mutation (how the GraphQL paths were built)
 

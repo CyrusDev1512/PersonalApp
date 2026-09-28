@@ -1343,7 +1343,8 @@ def cmd_read(args):
     from scripts.fb_messenger import read_thread, resolve_thread_id
     thread_id, _ = resolve_thread_id(args.profile, args.thread_id)
     headless = not args.no_headless
-    asyncio.run(read_thread(args.profile, thread_id, args.count, headless))
+    asyncio.run(read_thread(args.profile, thread_id, args.count, headless,
+                            save_dir=args.save_attachments))
 
 
 def cmd_search(args):
@@ -1636,6 +1637,8 @@ def main():
     read_parser = subparsers.add_parser("read", help="Read messages from a Messenger thread")
     read_parser.add_argument("thread_id", help="Thread ID or contact name (from cache)")
     read_parser.add_argument("--count", type=int, default=20, help="Number of messages (default: 20)")
+    read_parser.add_argument("--save-attachments", metavar="DIR",
+                             help="Save file attachments in the loaded messages to DIR (E2EE threads)")
     read_parser.add_argument("--no-headless", action="store_true", help="Run in headed mode")
 
     # search (find user and read messages)

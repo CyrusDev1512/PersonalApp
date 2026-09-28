@@ -347,6 +347,7 @@ uv run fb inbox --count 30 --no-headless
 uv run fb read Alice                       # by name
 uv run fb read 1234567890123456            # by thread ID
 uv run fb read Alice --count 50
+uv run fb read Alice --count 10 --save-attachments ./files   # also save pptx/pdf/… attachments (E2EE)
 ```
 
 ### Messenger — Search and Read

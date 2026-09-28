@@ -1,6 +1,7 @@
 """Messenger operations via Playwright browser automation."""
 
 import asyncio
+import base64
 import json
 import os
 import re
@@ -1009,7 +1010,8 @@ async def _extract_messages(page, count: int) -> list[str]:
 
 
 async def read_thread(
-    profile: str, thread_id: str, count: int = 20, headless: bool = True
+    profile: str, thread_id: str, count: int = 20, headless: bool = True,
+    save_dir: str | None = None,
 ):
     """Read messages from a specific Messenger thread."""
     p, browser, context = await create_browser_context(profile, headless)
@@ -1079,10 +1081,68 @@ async def read_thread(
 
         print(f"  {len(messages)} messages shown.")
 
+        if save_dir:
+            await _save_attachments(page, save_dir)
+
         await save_storage_state(context, profile)
 
     finally:
         await _teardown(p, browser, context, page)
+
+
+_B64_CHUNK = 4 * 1024 * 1024  # base64 chars per evaluate round trip
+
+
+async def _save_attachments(page, save_dir: str):
+    """Save file attachments currently loaded in the thread to save_dir.
+
+    E2EE attachments are decrypted client-side and exposed as
+    <a href="blob:..." download="<filename>">; there is no fbcdn URL to fetch.
+    The blob is read inside the page, base64-encoded, and pulled back in chunks.
+    Only messages loaded by --count are in the DOM, so older files need a
+    larger --count. Non-E2EE (https) file links are not handled.
+    """
+    files = await page.evaluate(
+        """() => [...document.querySelectorAll('div[role="main"] a[href^="blob:"]')]
+            .map(a => ({href: a.href,
+                        name: a.getAttribute('download') || a.getAttribute('aria-label') || ''}))"""
+    )
+    os.makedirs(save_dir, exist_ok=True)
+    print(f"  Attachments: {len(files)} found")
+    for i, f in enumerate(files):
+        name = os.path.basename(f["name"].strip()) or f"attachment_{i + 1}"
+        meta = await page.evaluate(
+            """async ([href, key]) => {
+                const b = await (await fetch(href)).blob();
+                const buf = new Uint8Array(await b.arrayBuffer());
+                let s = '';
+                for (let j = 0; j < buf.length; j += 0x8000)
+                    s += String.fromCharCode.apply(null, buf.subarray(j, j + 0x8000));
+                (window.__fbkitDl = window.__fbkitDl || {})[key] = btoa(s);
+                return {size: buf.length, b64len: window.__fbkitDl[key].length};
+            }""",
+            [f["href"], i],
+        )
+        parts = []
+        for off in range(0, meta["b64len"], _B64_CHUNK):
+            parts.append(await page.evaluate(
+                "([k, a, b]) => window.__fbkitDl[k].slice(a, b)", [i, off, off + _B64_CHUNK]
+            ))
+        await page.evaluate("k => { delete window.__fbkitDl[k]; }", i)
+        data = base64.b64decode("".join(parts))
+        if len(data) != meta["size"]:
+            print(f"  ✗ {name}: size mismatch ({len(data)} vs {meta['size']}), not saved",
+                  file=sys.stderr)
+            continue
+        path = os.path.join(save_dir, name)
+        stem, ext = os.path.splitext(path)
+        n = 1
+        while os.path.exists(path):
+            path = f"{stem} ({n}){ext}"
+            n += 1
+        with open(path, "wb") as fh:
+            fh.write(data)
+        print(f"  ✓ {path} ({len(data):,} bytes)")
 
 
 def _parse_timestamp(text: str, reference_date: datetime | None = None) -> str | None:
