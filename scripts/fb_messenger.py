@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import datetime, timedelta
 
 from scripts.fb_browser import (
@@ -269,6 +270,31 @@ async def _count_sent_file(page, name: str) -> int:
     )
 
 
+_DELIVERED_RE = "已傳送|已送達|已讀|Sent|Delivered|Seen"
+
+
+async def _delivered_after(page, name: str) -> bool:
+    """True once a delivery status line follows the last sent link named `name`.
+
+    While a sent file is still uploading, its local blob link is already in
+    the thread; the status line under your last message (「已傳送」) appears
+    only when the send completes (seen live 2026-09-29, 50 MB E2EE pptx).
+    """
+    return await page.evaluate(
+        """([n, re]) => { const main = document.querySelector('div[role="main"]');
+            if (!main) return false;
+            const a = [...main.querySelectorAll('a[href]')]
+              .filter(x => x.getAttribute('download') === n
+                           || (/fbsbx\\.com/.test(x.href) && x.textContent.trim().startsWith(n)));
+            if (!a.length) return false;
+            const r = document.createRange();
+            r.setStartAfter(a[a.length - 1]);
+            r.setEnd(main, main.childNodes.length);
+            return new RegExp(re).test(r.toString()); }""",
+        [name, _DELIVERED_RE],
+    )
+
+
 async def send_message(profile: str, thread_id: str, text: str, headless: bool = True,
                        files: list[str] | None = None):
     """Send a message (optionally with file attachments) to a Messenger thread."""
@@ -501,17 +527,60 @@ async def send_message(profile: str, thread_id: str, text: str, headless: bool =
             print("FAILED: input box still contains the text after Enter — message was NOT sent.", file=sys.stderr)
             sys.exit(1)
 
-        # Files: success = a new sent-file link with that name in the thread.
-        # Large E2EE uploads take a while; the link appears once it is done.
+        # Files, step 1: a new sent-file link with that name in the thread.
+        # On E2EE threads this link is the local copy and shows up while the
+        # upload is still running — it is NOT proof of delivery.
         for n in names:
             for _ in range(120):
                 if await _count_sent_file(page, n) > sent_before[n]:
-                    print(f"  file sent: {n}")
+                    print(f"  in thread (local): {n}")
                     break
                 await page.wait_for_timeout(2500)
             else:
                 print(f"WARNING: {n} not seen in the thread after 5 minutes. The text went out; "
                       "check Messenger before re-sending the file.", file=sys.stderr)
+                sys.exit(1)
+
+        if names:
+            # Step 2: keep the page open until the thread shows a delivery
+            # status (「已傳送」/ Sent …) after the last sent file. The E2EE
+            # upload is invisible to Playwright's request events (none fire
+            # for it), so the page's own status line is the only signal.
+            print("  waiting for upload to finish...")
+            deadline = time.monotonic() + 20 * 60
+            start = time.monotonic()
+            last_report = start
+            while time.monotonic() < deadline:
+                if await _delivered_after(page, names[-1]):
+                    print(f"    delivery status shown after {time.monotonic() - start:.0f}s")
+                    break
+                if time.monotonic() - last_report > 30:
+                    print(f"    still uploading ({time.monotonic() - start:.0f}s)...")
+                    last_report = time.monotonic()
+                await page.wait_for_timeout(2000)
+            else:
+                print("WARNING: no delivery status after 20 minutes; checking the thread anyway.",
+                      file=sys.stderr)
+
+            # Step 3: proof of delivery = the file is still in the thread after
+            # a fresh load (only the server copy survives a reload). Large
+            # E2EE files take a while to decrypt into the DOM, so poll.
+            print("  reloading thread to confirm delivery...")
+            await page.goto(url, wait_until="domcontentloaded")
+            await _dismiss_dialogs(page, profile)
+            missing = list(names)
+            for _ in range(72):
+                for n in list(missing):
+                    if await _count_sent_file(page, n) > sent_before[n]:
+                        print(f"  file sent: {n}")
+                        missing.remove(n)
+                if not missing:
+                    break
+                await page.wait_for_timeout(2500)
+            if missing:
+                print(f"FAILED: not in the thread after reload (upload did not reach Facebook): "
+                      f"{', '.join(missing)}. The text went out; re-send only these files.",
+                      file=sys.stderr)
                 sys.exit(1)
 
         first = text.split("\n")[0]

@@ -5,6 +5,27 @@ Originally forked from [htlin222/fbpost](https://github.com/htlin222/fbpost);
 maintained standalone since 2026-07-30 (upstream inactive since March 2026,
 PRs #1/#2 closed unmerged). MIT license and original copyright retained.
 
+## [0.11.1] - 2026-09-29
+
+### Fixed
+
+- **`fb send --file` reported large E2EE files as sent when they were not.**
+  On E2EE threads the sent-file link (local `blob:` copy) appears the moment
+  you press Enter, while the upload is still running; `fb send` took it as
+  proof, closed the browser and aborted the upload (a 50 MB pptx never
+  arrived; the 1.6 MB pdf beside it did). Now, after the link appears,
+  `fb send` waits for the delivery status line (「已傳送」/ Sent) after the
+  file, then reloads the thread and requires the file to still be there.
+  Only the reload counts as delivered; otherwise it exits 1 naming the files
+  to re-send.
+
+### Known limitation
+
+- The upload is invisible to Playwright request events, so the wait relies
+  on the status line. Its *absence* during an upload has not been observed
+  yet; if it shows early, the reload check still catches the failure (no
+  false success) but the upload is aborted and must be re-sent.
+
 ## [0.11.0] - 2026-09-29
 
 ### Added

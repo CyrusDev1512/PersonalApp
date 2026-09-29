@@ -107,6 +107,12 @@ sandbox.
   (「附加最大25 MB 的檔案」regular, 100 MB E2EE) — a regular self-thread cannot
   rehearse a >25 MB E2EE send. After attaching, page-level keyboard input no
   longer reaches the textbox; type with element-targeted calls.
+- E2EE sent files (verified 2026-09-29): the sender's `a[download]` link
+  appears immediately, before upload — it is NOT delivery. No Playwright
+  request event fires for the upload, so do not wait on network idle.
+  Delivery = the status line 「已傳送」 after the file; proof = the link is
+  still there after a reload. Closing the browser earlier silently drops
+  the file.
 
 ## Capturing a new mutation (how the GraphQL paths were built)
 
