@@ -39,6 +39,9 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
   int? _categoryId;
   late String _thisMonth;
   late String _month;
+
+  /// Mục tiêu tháng này (để báo khi mục tiêu tháng sau nhập vào một chuỗi lặp lại sẵn có).
+  List<GoalView> _thisMonthGoals = const [];
   late bool _repeat;
 
   List<Category>? _categories;
@@ -54,6 +57,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     final state = context.read<AppState>();
     _thisMonth = state.summary?.month ?? currentMonthIct(state.now());
     if (parseMonth(_thisMonth) == null) _thisMonth = currentMonthIct(state.now());
+    _thisMonthGoals = state.summary?.goals ?? const [];
     _name = TextEditingController(text: g?.name ?? '');
     _amount = TextEditingController(text: g == null ? '' : formatGrouped(g.amount));
     _openingSpent = TextEditingController(
@@ -118,7 +122,12 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
       }
       await state.load();
       if (!mounted) return;
-      showInfo(context, _editing ? 'Đã lưu mục tiêu' : 'Đã thêm mục tiêu "${input.name}"');
+      final message = _editing
+          ? 'Đã lưu mục tiêu'
+          : _month != _thisMonth
+          ? 'Đã tạo mục tiêu cho ${monthLabel(_month).toLowerCase()}'
+          : 'Đã thêm mục tiêu "${input.name}"';
+      showInfo(context, message);
       Navigator.of(context).pop(true);
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -266,6 +275,15 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
                   selected: {_month},
                   onSelectionChanged: _saving ? null : (s) => setState(() => _month = s.first),
                 ),
+              if (_seriesForNextMonth case final series?) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Tháng này đã có "${series.name}" lặp lại cùng loại và danh mục — mục tiêu '
+                  '${shortMonthLabel(_month)} của chuỗi đó sẽ được cập nhật thay vì tạo thêm.',
+                  key: const Key('goal_series_hint'),
+                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
               const SizedBox(height: 8),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -314,6 +332,16 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
         ),
       ),
     );
+  }
+
+  /// Mục tiêu lặp lại tháng này cùng loại + danh mục với mục tiêu đang tạo cho tháng sau
+  /// (server sẽ cập nhật tháng sau của chuỗi đó thay vì tạo chuỗi mới).
+  GoalView? get _seriesForNextMonth {
+    if (_editing || _month == _thisMonth || _categoryId == null) return null;
+    for (final g in _thisMonthGoals) {
+      if (g.repeatMonthly && g.type == _type && g.categoryId == _categoryId) return g;
+    }
+    return null;
   }
 
   Widget _buildCategoryField() {

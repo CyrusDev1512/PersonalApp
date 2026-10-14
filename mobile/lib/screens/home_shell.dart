@@ -22,13 +22,17 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   late int _index;
 
-  /// Tab Giao dịch mở với bộ lọc "Chưa phân loại" (khi đi từ chip ở Tổng quan).
-  bool _txUncategorized = false;
+  /// Các tab đã mở ít nhất một lần; tab chưa mở thì chưa dựng (khỏi tải dữ liệu thừa).
+  final Set<int> _opened = {};
+
+  /// Mở tab Giao dịch với bộ lọc "Chưa phân loại" (khi đi từ chip ở Tổng quan).
+  final _transactions = TransactionsController();
 
   @override
   void initState() {
     super.initState();
     _index = widget.initialIndex;
+    _opened.add(_index);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final state = context.read<AppState>();
@@ -36,29 +40,45 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  @override
+  void dispose() {
+    _transactions.dispose();
+    super.dispose();
+  }
+
   void _select(int index) {
     setState(() {
       _index = index;
-      _txUncategorized = false;
+      _opened.add(index);
     });
   }
 
   void _openUncategorized() {
-    setState(() {
-      _index = 1;
-      _txUncategorized = true;
-    });
+    _transactions.showUncategorized();
+    _select(1);
   }
 
   @override
   Widget build(BuildContext context) {
     final unread = context.select<AppState, int>((s) => s.summary?.unreadAlerts ?? 0);
-    final body = switch (_index) {
-      0 => DashboardScreen(onOpenUncategorized: _openUncategorized, onOpenAlerts: () => _select(2)),
-      1 => TransactionsScreen(key: ValueKey('tx_$_txUncategorized'), initialUncategorized: _txUncategorized),
-      2 => const AlertsScreen(),
-      _ => const SettingsScreen(),
-    };
+    // Giữ trạng thái các tab (tháng, bộ lọc, vị trí cuộn, chữ đang gõ) khi chuyển tab; tab tự tải lại khi hiện lại.
+    final tabs = <Widget>[
+      DashboardScreen(onOpenUncategorized: _openUncategorized, onOpenAlerts: () => _select(2)),
+      TransactionsScreen(controller: _transactions, active: _index == 1),
+      AlertsScreen(active: _index == 2),
+      SettingsScreen(active: _index == 3),
+    ];
+    final body = IndexedStack(
+      index: _index,
+      children: [
+        for (var i = 0; i < tabs.length; i++)
+          // Tab ẩn: tắt Hero (các FAB trùng tag mặc định) và animation.
+          HeroMode(
+            enabled: i == _index,
+            child: TickerMode(enabled: i == _index, child: _opened.contains(i) ? tabs[i] : const SizedBox.shrink()),
+          ),
+      ],
+    );
     return Scaffold(
       body: body,
       bottomNavigationBar: NavigationBar(

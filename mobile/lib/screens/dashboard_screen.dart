@@ -124,6 +124,10 @@ class _DashboardBody extends StatelessWidget {
               goal: goal,
               onTap: () => DashboardScreen.openGoalForm(context, goal: goal),
             ),
+        if (state.nextMonthGoals.isNotEmpty) ...[
+          SectionHeader('Mục tiêu tháng sau (${shortMonthLabel(state.nextMonth ?? shiftMonth(summary.month, 1))})'),
+          _NextMonthGoals(goals: state.nextMonthGoals),
+        ],
         SectionHeader(
           'Cảnh báo gần đây',
           trailing: TextButton(onPressed: onOpenAlerts, child: const Text('Xem tất cả')),
@@ -428,14 +432,18 @@ class _IngestHealthNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Server soạn sẵn cảnh báo (gồm cả số email chưa đọc được) → hiện nguyên văn.
+    final warnings = health.warnings;
     final lines = <String>[
-      if (health.stale) 'Không có dữ liệu mới từ ngân hàng trong 48 giờ — kiểm tra webhook/email.',
+      ...warnings,
+      if (warnings.isEmpty && health.stale) 'Nguồn dữ liệu ngân hàng đang gặp sự cố — kiểm tra webhook/email.',
       if (health.errorEvents > 0) '${health.errorEvents} biến động xử lý lỗi.',
-      if (health.unparsedEvents > 0) '${health.unparsedEvents} email chưa đọc được nội dung.',
+      if (warnings.isEmpty && health.unparsedEvents > 0) '${health.unparsedEvents} email chưa đọc được nội dung.',
       if (health.emailError != null) 'Lỗi email: ${health.emailError}',
     ];
     final color = Colors.amber.shade800;
     return Container(
+      key: const Key('ingest_health_note'),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
@@ -448,6 +456,40 @@ class _IngestHealthNote extends StatelessWidget {
           Icon(Icons.sync_problem, color: color),
           const SizedBox(width: 10),
           Expanded(child: Text(lines.join('\n'))),
+        ],
+      ),
+    );
+  }
+}
+
+/// Mục tiêu đã tạo trước cho tháng sau: danh sách gọn, chạm để sửa / xoá.
+class _NextMonthGoals extends StatelessWidget {
+  const _NextMonthGoals({required this.goals});
+
+  final List<GoalView> goals;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: const Key('next_month_goals'),
+      child: Column(
+        children: [
+          for (final goal in goals)
+            ListTile(
+              dense: true,
+              leading: Icon(goal.isReserve ? Icons.savings_outlined : Icons.shopping_basket_outlined),
+              title: Text(goal.name, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                [
+                  goal.typeLabel,
+                  if (goal.categoryName != null) '${goal.categoryIcon ?? ''} ${goal.categoryName}'.trim(),
+                  if (goal.spent > 0) 'đã tính ${formatVnd(goal.spent)}',
+                ].join(' · '),
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Text(formatVnd(goal.amount), style: Theme.of(context).textTheme.titleSmall),
+              onTap: () => DashboardScreen.openGoalForm(context, goal: goal),
+            ),
         ],
       ),
     );

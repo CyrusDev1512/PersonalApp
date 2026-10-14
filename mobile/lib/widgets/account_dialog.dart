@@ -56,8 +56,9 @@ class _AccountFormDialogState extends State<AccountFormDialog> {
     _balance = TextEditingController();
     final bank = a?.bank.toUpperCase() ?? 'VCB';
     _bank = bankChoices.containsKey(bank) ? bank : 'OTHER';
-    _includeInTotal = a?.includeInTotal ?? true;
     _confirmed = a?.confirmed ?? true;
+    // TK chưa xác nhận không được tính vào tổng dù cờ đang bật → hiện đúng trạng thái thực tế.
+    _includeInTotal = (a?.includeInTotal ?? true) && _confirmed;
   }
 
   @override
@@ -213,7 +214,13 @@ class _AccountFormDialogState extends State<AccountFormDialog> {
                 title: const Text('Tính vào tổng số dư'),
                 subtitle: const Text('Tắt cho TK tiết kiệm riêng'),
                 value: _includeInTotal,
-                onChanged: _saving ? null : (v) => setState(() => _includeInTotal = v),
+                onChanged: _saving
+                    ? null
+                    : (v) => setState(() {
+                        _includeInTotal = v;
+                        // Tính vào tổng nghĩa là TK của mình: server cũng xác nhận luôn TK.
+                        if (v) _confirmed = true;
+                      }),
               ),
               if (a != null && !a.confirmed)
                 CheckboxListTile(
@@ -221,7 +228,13 @@ class _AccountFormDialogState extends State<AccountFormDialog> {
                   title: const Text('Xác nhận TK mới'),
                   subtitle: const Text('TK này được tự phát hiện từ biến động — xác nhận là của bạn'),
                   value: _confirmed,
-                  onChanged: _saving ? null : (v) => setState(() => _confirmed = v ?? false),
+                  onChanged: _saving
+                      ? null
+                      : (v) => setState(() {
+                          _confirmed = v ?? false;
+                          // TK chưa xác nhận thì không tính vào tổng.
+                          if (!_confirmed) _includeInTotal = false;
+                        }),
                 ),
               if (_error != null) ...[
                 const SizedBox(height: 8),

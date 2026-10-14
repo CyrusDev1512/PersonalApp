@@ -10,7 +10,10 @@ import '../widgets/common.dart';
 
 /// Màn "Cảnh báo": lịch sử, đánh dấu đã đọc.
 class AlertsScreen extends StatefulWidget {
-  const AlertsScreen({super.key});
+  const AlertsScreen({super.key, this.active = true});
+
+  /// Tab đang hiện; chuyển từ ẩn sang hiện thì tải lại.
+  final bool active;
 
   @override
   State<AlertsScreen> createState() => _AlertsScreenState();
@@ -26,6 +29,12 @@ class _AlertsScreenState extends State<AlertsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(AlertsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) _load();
   }
 
   ApiClient? get _client => context.read<AppState>().client;

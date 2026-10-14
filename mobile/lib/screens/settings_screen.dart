@@ -12,7 +12,10 @@ import 'connect_screen.dart';
 
 /// Màn "Cài đặt": máy chủ, tài khoản, ngưỡng cảnh báo, lương dự kiến.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, this.active = true});
+
+  /// Tab đang hiện; chuyển từ ẩn sang hiện thì tải lại danh sách tài khoản (giữ chữ đang gõ trong form).
+  final bool active;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -35,6 +38,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(SettingsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      if (_settings == null || _accounts == null) {
+        _load();
+      } else {
+        _reloadAccounts(quiet: true);
+      }
+    }
   }
 
   @override
@@ -65,14 +80,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _reloadAccounts() async {
+  /// [quiet]: tự làm mới khi quay lại tab — lỗi thì giữ danh sách cũ, không báo.
+  Future<void> _reloadAccounts({bool quiet = false}) async {
     final client = _client;
     if (client == null) return;
     try {
       final list = await client.listAccounts();
       if (mounted) setState(() => _accounts = list);
     } on ApiException catch (e) {
-      if (mounted) showError(context, e);
+      if (mounted && !quiet) showError(context, e);
     }
   }
 
@@ -250,7 +266,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   a.balanceKnown
                       ? '${formatVnd(a.balance!)}${a.balanceDerived ? ' (ước tính)' : ''}'
                       : 'chưa biết số dư',
-                  if (!a.includeInTotal) 'không tính vào tổng',
+                  if (!a.includeInTotal || !a.confirmed) 'không tính vào tổng',
                 ].join(' · '),
               ),
               trailing: a.confirmed

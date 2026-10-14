@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../api/api_client.dart';
 import '../models/models.dart';
+import '../utils/dates.dart';
 import 'connection_store.dart';
 
 typedef ApiClientFactory = ApiClient Function(String baseUrl, String token);
@@ -45,6 +46,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   ApiClient? _client;
   bool _initialized;
   Summary? _summary;
+  List<GoalView> _nextMonthGoals = const [];
+  String? _nextMonth;
+  int _goalsRequest = 0;
   bool _loading = false;
   ApiException? _error;
   DateTime? _lastLoadedAt;
@@ -61,6 +65,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// Đã đọc xong thông tin kết nối đã lưu.
   bool get initialized => _initialized;
   Summary? get summary => _summary;
+
+  /// Mục tiêu của tháng sau (`GET /api/goals?month=<tháng sau>`) để xem/sửa trước; rỗng nếu chưa có.
+  List<GoalView> get nextMonthGoals => _nextMonthGoals;
+
+  /// Tháng ("YYYY-MM") của [nextMonthGoals].
+  String? get nextMonth => _nextMonth;
   bool get loading => _loading;
   ApiException? get error => _error;
   String? get errorMessage => _error?.message;
@@ -120,8 +130,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await store.save(ConnectionInfo(baseUrl: client.baseUrl, token: client.token));
     _setClient(client);
     if (summaryJson != null) {
-      _applyLoaded(Summary.fromJson(summaryJson));
+      final s = Summary.fromJson(summaryJson);
+      _applyLoaded(s);
       unawaited(_saveCache(client.baseUrl, summaryJson));
+      unawaited(_loadNextMonthGoals(client, _generation, s.month));
     } else {
       unawaited(load());
     }
@@ -138,6 +150,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _client = client;
     _initialized = true;
     _summary = null;
+    _nextMonthGoals = const [];
+    _nextMonth = null;
     _error = null;
     _lastLoadedAt = null;
     _loading = false;
@@ -162,6 +176,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       if (generation != _generation) return;
       _applyLoaded(s);
       unawaited(_saveCache(client.baseUrl, raw));
+      await _loadNextMonthGoals(client, generation, s.month);
     } on ApiException catch (e) {
       if (generation != _generation) return;
       _error = e;
@@ -192,8 +207,30 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Tải mục tiêu tháng sau tháng [month] của tổng quan. Lỗi thì bỏ qua (giữ danh sách cũ nếu cùng tháng).
+  Future<void> _loadNextMonthGoals(ApiClient client, int generation, String month) async {
+    final next = shiftMonth(parseMonth(month) == null ? currentMonthIct(now()) : month, 1);
+    final id = ++_goalsRequest;
+    List<GoalView>? goals;
+    try {
+      goals = await client.listGoals(month: next);
+    } catch (_) {
+      goals = null;
+    }
+    if (generation != _generation || id != _goalsRequest) return;
+    if (goals == null && _nextMonth == next) return;
+    _nextMonth = next;
+    _nextMonthGoals = goals ?? const [];
+    _notify();
+  }
+
   /// Dùng tổng quan server trả kèm (vd. sau PATCH giao dịch) thay vì tải lại.
-  void applySummary(Summary s) => _applyLoaded(s);
+  void applySummary(Summary s) {
+    _applyLoaded(s);
+    final client = _client;
+    // Thao tác có thể đổi mục tiêu tháng sau (vd. "Tính cho tháng sau").
+    if (client != null) unawaited(_loadNextMonthGoals(client, _generation, s.month));
+  }
 
   // ------------------------------------------------------------ tự làm mới
 

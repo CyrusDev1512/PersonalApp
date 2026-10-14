@@ -11,6 +11,9 @@ String currentMonthIct([DateTime? now]) {
   return '${ict.year}-${_two(ict.month)}';
 }
 
+/// Tháng ("YYYY-MM") của thời điểm [dt] theo giờ Việt Nam.
+String monthOfIct(DateTime dt) => currentMonthIct(dt);
+
 /// (năm, tháng) từ "YYYY-MM"; chuỗi sai định dạng -> `null`.
 (int, int)? parseMonth(String month) {
   final m = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(month);

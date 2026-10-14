@@ -20,24 +20,35 @@ class ExpectedIncome {
 
 /// Sức khoẻ nguồn dữ liệu (webhook, email).
 class IngestHealth {
-  const IngestHealth({this.stale = false, this.errorEvents = 0, this.unparsedEvents = 0, this.sources = const {}});
+  const IngestHealth({
+    this.stale = false,
+    this.warnings = const [],
+    this.errorEvents = 0,
+    this.unparsedEvents = 0,
+    this.sources = const {},
+  });
 
-  /// `true` = không có dữ liệu mới quá lâu.
+  /// `true` = nguồn dữ liệu đang có vấn đề (= [warnings] không rỗng).
   final bool stale;
+
+  /// Thông báo tiếng Việt do server soạn sẵn (email lỗi, quá lâu không có webhook…), hiện nguyên văn.
+  final List<String> warnings;
   final int errorEvents;
   final int unparsedEvents;
 
   /// Thông tin thô từng nguồn (`sepay`, `casso`, `email`…).
   final Map<String, JsonMap> sources;
 
-  bool get hasProblems => stale || errorEvents > 0 || unparsedEvents > 0 || emailError != null;
+  bool get hasProblems => stale || warnings.isNotEmpty || errorEvents > 0 || unparsedEvents > 0 || emailError != null;
 
   String? get emailError => asStringOrNull(sources['email']?['last_error']);
 
   factory IngestHealth.fromJson(JsonMap json) {
     final rawSources = asMap(json['sources']);
+    final warnings = asStringList(json['warnings']).where((w) => w.trim().isNotEmpty).toList();
     return IngestHealth(
-      stale: asBool(json['stale']),
+      stale: asBool(json['stale'], warnings.isNotEmpty),
+      warnings: warnings,
       errorEvents: asInt(json['error_events']),
       unparsedEvents: asInt(json['unparsed_events']),
       sources: {for (final e in rawSources.entries) e.key: asMap(e.value)},

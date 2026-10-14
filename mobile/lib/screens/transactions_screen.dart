@@ -10,11 +10,33 @@ import '../widgets/common.dart';
 import 'manual_tx_screen.dart';
 import 'tx_action_sheet.dart';
 
+/// Điều khiển tab Giao dịch từ bên ngoài (vd. chip "chưa phân loại" ở Tổng quan) mà không phải dựng lại màn hình.
+class TransactionsController extends ChangeNotifier {
+  bool _uncategorizedRequested = false;
+
+  /// Mở danh sách "Chưa phân loại" của tháng hiện tại.
+  void showUncategorized() {
+    _uncategorizedRequested = true;
+    notifyListeners();
+  }
+
+  /// Lấy và xoá yêu cầu đang chờ (màn hình có thể chưa được dựng khi có yêu cầu).
+  bool takeUncategorizedRequest() {
+    final requested = _uncategorizedRequested;
+    _uncategorizedRequested = false;
+    return requested;
+  }
+}
+
 /// Màn "Giao dịch": lọc theo tháng / chưa phân loại, chạm để phân loại.
 class TransactionsScreen extends StatefulWidget {
-  const TransactionsScreen({super.key, this.initialUncategorized = false});
+  const TransactionsScreen({super.key, this.initialUncategorized = false, this.controller, this.active = true});
 
   final bool initialUncategorized;
+  final TransactionsController? controller;
+
+  /// Tab đang hiện; chuyển từ ẩn sang hiện thì tải lại (giữ tháng và bộ lọc).
+  final bool active;
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -34,16 +56,56 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   List<Category> _categories = const [];
   int _requestId = 0;
 
+  /// (tháng, bộ lọc) của [_items]; khác bộ lọc đang chọn thì không hiện các dòng cũ.
+  String? _loadedKey;
+
+  String get _key => '$_month|$_uncategorized';
+
   @override
   void initState() {
     super.initState();
-    final state = context.read<AppState>();
-    _currentMonth = state.summary?.month ?? currentMonthIct(state.now());
-    if (parseMonth(_currentMonth) == null) _currentMonth = currentMonthIct(state.now());
+    _currentMonth = _resolveCurrentMonth();
     _month = _currentMonth;
-    _uncategorized = widget.initialUncategorized;
+    widget.controller?.addListener(_onControllerRequest);
+    _uncategorized = widget.initialUncategorized || (widget.controller?.takeUncategorizedRequest() ?? false);
     _load();
     _loadCategories();
+  }
+
+  @override
+  void didUpdateWidget(TransactionsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_onControllerRequest);
+      widget.controller?.addListener(_onControllerRequest);
+    }
+    if (widget.active && !oldWidget.active) {
+      _currentMonth = _resolveCurrentMonth();
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?.removeListener(_onControllerRequest);
+    super.dispose();
+  }
+
+  String _resolveCurrentMonth() {
+    final state = context.read<AppState>();
+    final month = state.summary?.month;
+    return month != null && parseMonth(month) != null ? month : currentMonthIct(state.now());
+  }
+
+  void _onControllerRequest() {
+    if (!(widget.controller?.takeUncategorizedRequest() ?? false)) return;
+    setState(() {
+      _currentMonth = _resolveCurrentMonth();
+      _month = _currentMonth;
+      _uncategorized = true;
+    });
+    // Tab đang ẩn thì tải khi được hiện (didUpdateWidget).
+    if (widget.active) _load();
   }
 
   ApiClient? get _client => context.read<AppState>().client;
@@ -63,9 +125,16 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final client = _client;
     if (client == null) return;
     final id = ++_requestId;
+    final key = _key;
     setState(() {
       _loading = true;
       _error = null;
+      if (key != _loadedKey) {
+        // Đổi tháng / bộ lọc: bỏ danh sách cũ để không lẫn với tháng mới khi đang tải hoặc lỗi.
+        _items = const [];
+        _total = 0;
+        _loadedKey = null;
+      }
     });
     try {
       final page = await client.listTransactions(month: _month, uncategorized: _uncategorized, limit: _pageSize);
@@ -73,6 +142,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       setState(() {
         _items = page.items;
         _total = page.total;
+        _loadedKey = key;
         _loading = false;
       });
     } on ApiException catch (e) {
@@ -186,6 +256,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             ),
           ),
           const Divider(height: 1),
+          // Tải lại lỗi khi vẫn còn danh sách cũ (cùng tháng/bộ lọc): báo lỗi thay vì im lặng.
+          if (_error != null && _items.isNotEmpty) _ReloadErrorBanner(message: _error!, onRetry: _load),
           Expanded(child: _buildList()),
         ],
       ),
@@ -233,6 +305,33 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 return TxTile(tx: tx, onTap: () => _openTx(tx));
               },
             ),
+    );
+  }
+}
+
+class _ReloadErrorBanner extends StatelessWidget {
+  const _ReloadErrorBanner({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      key: const Key('tx_reload_error'),
+      color: scheme.errorContainer,
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, size: 20, color: scheme.onErrorContainer),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('Không tải lại được: $message', style: TextStyle(color: scheme.onErrorContainer)),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Thử lại')),
+        ],
+      ),
     );
   }
 }
@@ -303,7 +402,13 @@ class TxTile extends StatelessWidget {
                 StatusBadge(categoryLabel, color: scheme.primary)
               else if (tx.isOut)
                 StatusBadge('Chưa phân loại', color: scheme.error, icon: Icons.label_off_outlined),
-              if (tx.goalName != null) StatusBadge('🎯 ${tx.goalName}', color: scheme.tertiary),
+              if (tx.goalName != null)
+                StatusBadge(
+                  tx.goalMonth != null && tx.goalMonth != tx.month
+                      ? '🎯 ${tx.goalName} · ${shortMonthLabel(tx.goalMonth!)}'
+                      : '🎯 ${tx.goalName}',
+                  color: scheme.tertiary,
+                ),
               if (tx.isPending) StatusBadge('Đang chờ khớp', color: Colors.amber.shade800, icon: Icons.hourglass_top),
               if (tx.isExcluded) StatusBadge('Đã loại trừ', color: scheme.outline, icon: Icons.block),
               if (tx.isPossibleDuplicate)

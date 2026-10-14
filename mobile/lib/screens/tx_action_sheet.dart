@@ -32,18 +32,6 @@ Future<TxSheetResult?> showTxActionSheet(
   );
 }
 
-/// Gợi ý cụm từ để "nhớ luật" từ mô tả giao dịch: bỏ mã số dài, lấy vài từ đầu.
-String suggestRulePattern(String description) {
-  final words = description
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^\p{L}\s]', unicode: true), ' ')
-      .split(RegExp(r'\s+'))
-      .where((w) => w.length >= 2)
-      .take(4)
-      .toList();
-  return words.join(' ');
-}
-
 /// Bảng thao tác một giao dịch: chọn danh mục (+ nhớ luật), gán mục tiêu,
 /// "Tính cho tháng sau", loại trừ, xoá (nhập tay).
 class TxActionSheet extends StatefulWidget {
@@ -65,6 +53,13 @@ class _TxActionSheetState extends State<TxActionSheet> {
   bool _busy = false;
   String? _error;
 
+  /// Tháng của giao dịch (giờ VN): chỉ gán được vào mục tiêu của tháng này.
+  late final String _txMonth;
+
+  /// Mục tiêu của [_txMonth]; `null` = đang tải.
+  List<GoalView>? _goals;
+  String? _goalsError;
+
   Tx get tx => widget.tx;
 
   @override
@@ -72,8 +67,12 @@ class _TxActionSheetState extends State<TxActionSheet> {
     super.initState();
     _categories = widget.categories;
     _categoryId = tx.categoryId;
-    _pattern = TextEditingController(text: suggestRulePattern(tx.description));
+    // Cụm từ server gợi ý luôn khớp mô tả giao dịch; không có thì để người dùng tự nhập.
+    _pattern = TextEditingController(text: tx.suggestedRule ?? '');
+    final state = context.read<AppState>();
+    _txMonth = tx.month ?? state.summary?.month ?? currentMonthIct(state.now());
     if (_categories.isEmpty) _loadCategories();
+    if (!tx.isInternalTransfer) _loadGoals();
   }
 
   @override
@@ -91,9 +90,24 @@ class _TxActionSheetState extends State<TxActionSheet> {
     }
   }
 
+  Future<void> _loadGoals() async {
+    try {
+      final list = await widget.client.listGoals(month: _txMonth);
+      if (mounted) setState(() => _goals = list);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _goalsError = e.message);
+    }
+  }
+
   List<Category> get _choices {
     final list = tx.isOut ? _categories.where((c) => c.isExpense || c.isTransfer).toList() : [..._categories];
     return list;
+  }
+
+  /// "Tiền trọ (11/2026)": mục tiêu giao dịch đang được gán.
+  String get _assignedGoalLabel {
+    final name = tx.goalName ?? 'Mục tiêu #${tx.goalId}';
+    return tx.goalMonth == null ? name : '$name (${shortMonthLabel(tx.goalMonth!)})';
   }
 
   Future<void> _patch(JsonMap changes, {String? done}) async {
@@ -127,14 +141,22 @@ class _TxActionSheetState extends State<TxActionSheet> {
 
   void _saveCategory() {
     final pattern = _pattern.text.trim();
-    if (_remember && pattern.length < 2) {
+    final remember = _remember && _categoryId != null;
+    if (remember && pattern.length < 2) {
       setState(() => _error = 'Nhập cụm từ (ít nhất 2 ký tự) để nhớ luật');
       return;
     }
-    _patch({
-      'category_id': _categoryId,
-      if (_remember && _categoryId != null) ...{'remember_rule': true, 'rule_pattern': pattern},
-    }, done: _remember ? 'Đã phân loại và nhớ luật "$pattern"' : 'Đã phân loại');
+    _patch(
+      {
+        'category_id': _categoryId,
+        if (remember) ...{'remember_rule': true, 'rule_pattern': pattern},
+      },
+      done: remember
+          ? 'Đã phân loại và nhớ luật "$pattern"'
+          : _categoryId == null
+          ? 'Đã bỏ phân loại'
+          : 'Đã phân loại',
+    );
   }
 
   Future<void> _delete() async {
@@ -170,8 +192,10 @@ class _TxActionSheetState extends State<TxActionSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final goals = context.select<AppState, List<GoalView>>((s) => s.summary?.goals ?? const []);
-    final goalIds = goals.map((g) => g.id).toSet();
+    final goals = _goals;
+    // Giao dịch đang gán vào mục tiêu của tháng khác (vd. "Tính cho tháng sau"): vẫn hiện để không
+    // lầm là "Tự động" và không bị bỏ gán khi chọn lại.
+    final assignedElsewhere = tx.goalId != null && goals != null && !goals.any((g) => g.id == tx.goalId);
     final changedCategory = _categoryId != tx.categoryId;
     final meta = [
       if (tx.accountName != null) tx.accountName!,
@@ -226,7 +250,13 @@ class _TxActionSheetState extends State<TxActionSheet> {
                     ChoiceChip(
                       label: Text(c.label),
                       selected: _categoryId == c.id,
-                      onSelected: _busy ? null : (sel) => setState(() => _categoryId = sel ? c.id : null),
+                      onSelected: _busy
+                          ? null
+                          : (sel) => setState(() {
+                              _categoryId = sel ? c.id : null;
+                              // Không có danh mục thì không có luật để nhớ.
+                              if (_categoryId == null) _remember = false;
+                            }),
                     ),
                 ],
               ),
@@ -243,6 +273,7 @@ class _TxActionSheetState extends State<TxActionSheet> {
                 enabled: !_busy,
                 decoration: const InputDecoration(
                   labelText: 'Cụm từ nhận diện',
+                  hintText: 'Cụm từ có trong mô tả, vd. tên cửa hàng',
                   helperText: 'Giao dịch sau có mô tả chứa cụm từ này sẽ tự vào danh mục đã chọn',
                   helperMaxLines: 2,
                   border: OutlineInputBorder(),
@@ -259,15 +290,20 @@ class _TxActionSheetState extends State<TxActionSheet> {
                 ),
               ],
             ),
-            if (goals.isNotEmpty && !tx.isInternalTransfer) ...[
+            if (!tx.isInternalTransfer && goals == null && _goalsError == null) ...[
+              const SizedBox(height: 16),
+              const LinearProgressIndicator(),
+            ] else if (goals != null && (goals.isNotEmpty || assignedElsewhere)) ...[
               const SizedBox(height: 16),
               DropdownButtonFormField<int?>(
-                initialValue: goalIds.contains(tx.goalId) ? tx.goalId : null,
+                key: const Key('tx_goal'),
+                initialValue: tx.goalId,
                 isExpanded: true,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Gán vào mục tiêu',
-                  helperText: 'Mặc định tự khớp theo danh mục',
-                  border: OutlineInputBorder(),
+                  helperText: 'Mục tiêu ${monthLabel(_txMonth).toLowerCase()} · mặc định tự khớp theo danh mục',
+                  helperMaxLines: 2,
+                  border: const OutlineInputBorder(),
                 ),
                 items: [
                   const DropdownMenuItem<int?>(
@@ -277,19 +313,44 @@ class _TxActionSheetState extends State<TxActionSheet> {
                   for (final g in goals)
                     DropdownMenuItem<int?>(
                       value: g.id,
-                      child: Text('${g.name} (${g.typeLabel})', overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        '${g.name} (${g.typeLabel} · ${shortMonthLabel(g.month.isEmpty ? _txMonth : g.month)})',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  if (assignedElsewhere)
+                    DropdownMenuItem<int?>(
+                      value: tx.goalId,
+                      enabled: false,
+                      child: Text(_assignedGoalLabel, overflow: TextOverflow.ellipsis),
                     ),
                 ],
                 onChanged: _busy
                     ? null
                     : (v) {
-                        if (v != tx.goalId) _patch({'goal_id': v}, done: 'Đã gán mục tiêu');
+                        if (v != tx.goalId) {
+                          _patch({'goal_id': v}, done: v == null ? 'Đã bỏ gán mục tiêu' : 'Đã gán mục tiêu');
+                        }
                       },
+              ),
+            ] else if (_goalsError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Không tải được mục tiêu ${monthLabel(_txMonth).toLowerCase()}: $_goalsError',
+                style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
               ),
             ],
             const SizedBox(height: 8),
             const Divider(),
-            if (tx.isOut && !tx.isExcluded)
+            if (tx.isOut && !tx.isExcluded && tx.countedForLaterMonth)
+              ListTile(
+                key: const Key('tx_counted_later'),
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event_available),
+                title: Text('Đã tính cho ${monthLabel(tx.goalMonth!).toLowerCase()}'),
+                subtitle: Text('Mục tiêu: $_assignedGoalLabel'),
+              )
+            else if (tx.isOut && !tx.isExcluded)
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.event_repeat),

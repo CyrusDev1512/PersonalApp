@@ -24,6 +24,7 @@ String formatVndOrDash(int? amount) => amount == null ? '—' : formatVnd(amount
 
 final RegExp _decimalTail = RegExp(r',\d{1,2}$');
 final RegExp _nonDigit = RegExp(r'\D');
+final RegExp _digit = RegExp(r'\d');
 
 /// Đọc lại số tiền người dùng nhập: "6.500.000đ", "6500000", "1.000.000,00",
 /// "1,000,000" -> int. Chuỗi rỗng / không có chữ số -> `null`.
@@ -47,7 +48,21 @@ class VndInputFormatter extends TextInputFormatter {
 
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    final raw = newValue.text;
+    var raw = newValue.text;
+    var cursor = newValue.selection.isValid ? newValue.selection.end.clamp(0, raw.length) : raw.length;
+    if (oldValue.selection.isValid &&
+        oldValue.selection.isCollapsed &&
+        raw.length < oldValue.text.length &&
+        raw.replaceAll(_nonDigit, '') == oldValue.text.replaceAll(_nonDigit, '')) {
+      // Chỉ xoá mỗi dấu chấm nhóm nghìn (định dạng lại sẽ thêm nó về): xoá luôn chữ số cạnh nó,
+      // nếu không phím xoá sẽ "không làm gì".
+      final backspace = cursor < oldValue.selection.end;
+      final index = backspace ? raw.substring(0, cursor).lastIndexOf(_digit) : raw.indexOf(_digit, cursor);
+      if (index >= 0) {
+        raw = raw.substring(0, index) + raw.substring(index + 1);
+        cursor = index;
+      }
+    }
     var digits = raw.replaceAll(_nonDigit, '');
     if (digits.isEmpty) {
       return const TextEditingValue(text: '', selection: TextSelection.collapsed(offset: 0));
@@ -59,7 +74,6 @@ class VndInputFormatter extends TextInputFormatter {
     }
     final formatted = formatGrouped(int.parse(digits));
 
-    final cursor = newValue.selection.isValid ? newValue.selection.end.clamp(0, raw.length) : raw.length;
     var digitsAfterCursor = raw.substring(cursor).replaceAll(_nonDigit, '').length;
     if (digitsAfterCursor > digits.length) digitsAfterCursor = digits.length;
 
