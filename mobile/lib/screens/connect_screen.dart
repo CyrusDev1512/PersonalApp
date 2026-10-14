@@ -91,8 +91,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
     if (!mounted) return;
     setState(() => _step = 'Đang kiểm tra token (/api/summary)…');
     try {
-      final summary = await client.getSummary();
-      await state.connect(client, summary: summary);
+      final summaryJson = await client.getSummaryJson();
+      await state.connect(client, summaryJson: summaryJson);
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -201,10 +201,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                     : const Icon(Icons.link),
                 label: const Text('Kiểm tra & kết nối'),
               ),
-              if (_step != null) ...[
-                const SizedBox(height: 12),
-                Text(_step!, textAlign: TextAlign.center),
-              ],
+              if (_step != null) ...[const SizedBox(height: 12), Text(_step!, textAlign: TextAlign.center)],
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Container(

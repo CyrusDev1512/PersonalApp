@@ -20,10 +20,10 @@ Future<void> main() async {
 
 /// Theme Material 3, màu chủ đạo teal.
 ThemeData buildTheme(Brightness brightness) => ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: brightness),
-      inputDecorationTheme: const InputDecorationTheme(isDense: true),
-    );
+  useMaterial3: true,
+  colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: brightness),
+  inputDecorationTheme: const InputDecorationTheme(isDense: true),
+);
 
 /// Gốc ứng dụng "Chi tiêu".
 ///
@@ -52,10 +52,7 @@ class PersonalFinanceApp extends StatelessWidget {
       supportedLocales: const [Locale('vi', 'VN'), Locale('en', 'US')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       home: const RootGate(),
-      routes: {
-        HomeShell.routeName: (_) => const HomeShell(),
-        ManualTxScreen.routeName: (_) => const ManualTxScreen(),
-      },
+      routes: {HomeShell.routeName: (_) => const HomeShell(), ManualTxScreen.routeName: (_) => const ManualTxScreen()},
       onGenerateRoute: _onGenerateRoute,
     );
     final existing = state;
@@ -75,12 +72,12 @@ class PersonalFinanceApp extends StatelessWidget {
           GoalView g => g,
           _ => null,
         };
-        return MaterialPageRoute<bool>(settings: settings, builder: (_) => GoalFormScreen(goal: goal));
-      case ConnectScreen.routeName:
         return MaterialPageRoute<bool>(
           settings: settings,
-          builder: (_) => const ConnectScreen(popOnSuccess: true),
+          builder: (_) => GoalFormScreen(goal: goal),
         );
+      case ConnectScreen.routeName:
+        return MaterialPageRoute<bool>(settings: settings, builder: (_) => const ConnectScreen(popOnSuccess: true));
     }
     return null;
   }

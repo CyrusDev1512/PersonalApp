@@ -14,21 +14,13 @@ class ExpectedIncome {
   /// Số tiền lương đang chờ nhận trong tháng.
   final int pending;
 
-  factory ExpectedIncome.fromJson(JsonMap json) => ExpectedIncome(
-        amount: asInt(json['amount']),
-        day: asInt(json['day']),
-        pending: asInt(json['pending']),
-      );
+  factory ExpectedIncome.fromJson(JsonMap json) =>
+      ExpectedIncome(amount: asInt(json['amount']), day: asInt(json['day']), pending: asInt(json['pending']));
 }
 
 /// Sức khoẻ nguồn dữ liệu (webhook, email).
 class IngestHealth {
-  const IngestHealth({
-    this.stale = false,
-    this.errorEvents = 0,
-    this.unparsedEvents = 0,
-    this.sources = const {},
-  });
+  const IngestHealth({this.stale = false, this.errorEvents = 0, this.unparsedEvents = 0, this.sources = const {}});
 
   /// `true` = không có dữ liệu mới quá lâu.
   final bool stale;
@@ -116,27 +108,27 @@ class Summary {
   List<Account> get unconfirmedAccounts => accounts.where((a) => !a.confirmed).toList();
 
   Summary copyWith({List<Alert>? latestAlerts, int? unreadAlerts}) => Summary(
-        month: month,
-        level: level,
-        generatedAt: generatedAt,
-        levelReason: levelReason,
-        balance: balance,
-        balanceKnown: balanceKnown,
-        balanceAsOf: balanceAsOf,
-        inTransit: inTransit,
-        floor: floor,
-        free: free,
-        buffer: buffer,
-        waitingIncome: waitingIncome,
-        expectedIncome: expectedIncome,
-        daysLeft: daysLeft,
-        accounts: accounts,
-        goals: goals,
-        uncategorizedCount: uncategorizedCount,
-        unreadAlerts: unreadAlerts ?? this.unreadAlerts,
-        latestAlerts: latestAlerts ?? this.latestAlerts,
-        ingestHealth: ingestHealth,
-      );
+    month: month,
+    level: level,
+    generatedAt: generatedAt,
+    levelReason: levelReason,
+    balance: balance,
+    balanceKnown: balanceKnown,
+    balanceAsOf: balanceAsOf,
+    inTransit: inTransit,
+    floor: floor,
+    free: free,
+    buffer: buffer,
+    waitingIncome: waitingIncome,
+    expectedIncome: expectedIncome,
+    daysLeft: daysLeft,
+    accounts: accounts,
+    goals: goals,
+    uncategorizedCount: uncategorizedCount,
+    unreadAlerts: unreadAlerts ?? this.unreadAlerts,
+    latestAlerts: latestAlerts ?? this.latestAlerts,
+    ingestHealth: ingestHealth,
+  );
 
   factory Summary.fromJson(JsonMap json) {
     final rawIncome = json['expected_income'];

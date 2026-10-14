@@ -56,11 +56,7 @@ class DashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Tổng quan'),
         actions: [
-          IconButton(
-            tooltip: 'Tải lại',
-            onPressed: state.loading ? null : state.load,
-            icon: const Icon(Icons.refresh),
-          ),
+          IconButton(tooltip: 'Tải lại', onPressed: state.loading ? null : state.load, icon: const Icon(Icons.refresh)),
         ],
       ),
       body: body,
@@ -74,12 +70,7 @@ class DashboardScreen extends StatelessWidget {
 }
 
 class _DashboardBody extends StatelessWidget {
-  const _DashboardBody({
-    required this.summary,
-    required this.state,
-    this.onOpenUncategorized,
-    this.onOpenAlerts,
-  });
+  const _DashboardBody({required this.summary, required this.state, this.onOpenUncategorized, this.onOpenAlerts});
 
   final Summary summary;
   final AppState state;
@@ -129,16 +120,16 @@ class _DashboardBody extends StatelessWidget {
           const _EmptyGoals()
         else
           for (final goal in summary.goals)
-            GoalCard(goal: goal, onTap: () => DashboardScreen.openGoalForm(context, goal: goal)),
+            GoalCard(
+              goal: goal,
+              onTap: () => DashboardScreen.openGoalForm(context, goal: goal),
+            ),
         SectionHeader(
           'Cảnh báo gần đây',
           trailing: TextButton(onPressed: onOpenAlerts, child: const Text('Xem tất cả')),
         ),
         if (summary.latestAlerts.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-            child: Text('Chưa có cảnh báo nào.'),
-          )
+          const Padding(padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8), child: Text('Chưa có cảnh báo nào.'))
         else
           Card(
             child: Column(
@@ -180,7 +171,10 @@ class _OfflineBanner extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: TextStyle(color: scheme.onErrorContainer, fontWeight: FontWeight.w600)),
+                  Text(
+                    title,
+                    style: TextStyle(color: scheme.onErrorContainer, fontWeight: FontWeight.w600),
+                  ),
                   Text(when, style: TextStyle(color: scheme.onErrorContainer)),
                 ],
               ),
@@ -209,8 +203,8 @@ class _BalanceCard extends StatelessWidget {
     final freeColor = free == null
         ? null
         : free < 0
-            ? Colors.red.shade700
-            : levelColor(summary.level == Level.unknown ? Level.ok : summary.level);
+        ? Colors.red.shade700
+        : levelColor(summary.level == Level.unknown ? Level.ok : summary.level);
     final income = summary.expectedIncome;
 
     return Card(
@@ -316,7 +310,10 @@ class _Metric extends StatelessWidget {
       children: [
         Text(label, style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 2),
-        Text(value, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, color: color)),
+        Text(
+          value,
+          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, color: color),
+        ),
         if (hint != null) Text(hint!, style: theme.textTheme.bodySmall),
       ],
     );
@@ -349,7 +346,7 @@ class _UnknownBalanceCard extends StatelessWidget {
     final text = missing.isEmpty
         ? 'Chưa có tài khoản nào có số dư. Thêm tài khoản và nhập số dư hiện tại để app tính được mức an toàn.'
         : 'Chưa biết số dư của: ${missing.map((a) => a.displayName).join(', ')}. '
-            'Nhập số dư hiện tại để app bắt đầu tính.';
+              'Nhập số dư hiện tại để app bắt đầu tính.';
     return Card(
       color: Theme.of(context).colorScheme.surfaceContainerHigh,
       child: Padding(

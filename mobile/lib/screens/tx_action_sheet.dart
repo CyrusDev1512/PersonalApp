@@ -26,6 +26,8 @@ Future<TxSheetResult?> showTxActionSheet(
     isScrollControlled: true,
     showDragHandle: true,
     useSafeArea: true,
+    // Chừa một khoảng phía trên để chạm ra ngoài là đóng được.
+    constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.88),
     builder: (_) => TxActionSheet(client: client, tx: tx, categories: categories),
   );
 }
@@ -268,8 +270,15 @@ class _TxActionSheetState extends State<TxActionSheet> {
                   border: OutlineInputBorder(),
                 ),
                 items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('Tự động theo danh mục')),
-                  for (final g in goals) DropdownMenuItem<int?>(value: g.id, child: Text('${g.name} (${g.typeLabel})')),
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Tự động theo danh mục', overflow: TextOverflow.ellipsis),
+                  ),
+                  for (final g in goals)
+                    DropdownMenuItem<int?>(
+                      value: g.id,
+                      child: Text('${g.name} (${g.typeLabel})', overflow: TextOverflow.ellipsis),
+                    ),
                 ],
                 onChanged: _busy
                     ? null
@@ -300,10 +309,9 @@ class _TxActionSheetState extends State<TxActionSheet> {
                 tx.isExcluded ? 'Tính lại giao dịch này' : 'Không tính giao dịch này vào chi tiêu và mục tiêu',
               ),
               enabled: !_busy,
-              onTap: () => _patch(
-                {'excluded': !tx.isExcluded},
-                done: tx.isExcluded ? 'Đã bỏ loại trừ' : 'Đã loại trừ giao dịch',
-              ),
+              onTap: () => _patch({
+                'excluded': !tx.isExcluded,
+              }, done: tx.isExcluded ? 'Đã bỏ loại trừ' : 'Đã loại trừ giao dịch'),
             ),
             if (tx.isManual)
               ListTile(
@@ -313,10 +321,7 @@ class _TxActionSheetState extends State<TxActionSheet> {
                 enabled: !_busy,
                 onTap: _delete,
               ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: scheme.error)),
-            ],
+            if (_error != null) ...[const SizedBox(height: 8), Text(_error!, style: TextStyle(color: scheme.error))],
           ],
         ),
       ),

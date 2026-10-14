@@ -82,9 +82,7 @@ class GoalView {
       openingSpent: asInt(json['opening_spent']),
       spent: spent,
       remaining: asIntOrNull(json['remaining']) ?? (amount - spent < 0 ? 0 : amount - spent),
-      usagePct: json['usage_pct'] == null
-          ? (amount > 0 ? spent * 100 / amount : 0)
-          : asDouble(json['usage_pct']),
+      usagePct: json['usage_pct'] == null ? (amount > 0 ? spent * 100 / amount : 0) : asDouble(json['usage_pct']),
       autoMatch: asBool(json['auto_match'], true),
     );
   }
@@ -112,12 +110,12 @@ class GoalInput {
 
   /// [includeMonth] = false cho PATCH (không đổi được tháng của mục tiêu).
   JsonMap toJson({bool includeMonth = true}) => {
-        'name': name,
-        'type': type,
-        'amount': amount,
-        'category_id': categoryId,
-        if (includeMonth && month != null) 'month': month,
-        'repeat_monthly': repeatMonthly,
-        'opening_spent': openingSpent,
-      };
+    'name': name,
+    'type': type,
+    'amount': amount,
+    'category_id': categoryId,
+    if (includeMonth && month != null) 'month': month,
+    'repeat_monthly': repeatMonthly,
+    'opening_spent': openingSpent,
+  };
 }

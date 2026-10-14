@@ -26,26 +26,26 @@ class Alert {
   final int? goalId;
 
   Alert copyWith({bool? read}) => Alert(
-        id: id,
-        createdAt: createdAt,
-        kind: kind,
-        level: level,
-        title: title,
-        message: message,
-        read: read ?? this.read,
-        transactionId: transactionId,
-        goalId: goalId,
-      );
+    id: id,
+    createdAt: createdAt,
+    kind: kind,
+    level: level,
+    title: title,
+    message: message,
+    read: read ?? this.read,
+    transactionId: transactionId,
+    goalId: goalId,
+  );
 
   factory Alert.fromJson(JsonMap json) => Alert(
-        id: asInt(json['id']),
-        createdAt: asDateTime(json['created_at']),
-        kind: asString(json['kind'], 'info'),
-        level: Level.parse(json['level']),
-        title: asString(json['title']),
-        message: asString(json['message']),
-        read: asBool(json['read']),
-        transactionId: asIntOrNull(json['transaction_id']),
-        goalId: asIntOrNull(json['goal_id']),
-      );
+    id: asInt(json['id']),
+    createdAt: asDateTime(json['created_at']),
+    kind: asString(json['kind'], 'info'),
+    level: Level.parse(json['level']),
+    title: asString(json['title']),
+    message: asString(json['message']),
+    read: asBool(json['read']),
+    transactionId: asIntOrNull(json['transaction_id']),
+    goalId: asIntOrNull(json['goal_id']),
+  );
 }

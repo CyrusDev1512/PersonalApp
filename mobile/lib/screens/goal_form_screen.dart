@@ -56,7 +56,9 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     if (parseMonth(_thisMonth) == null) _thisMonth = currentMonthIct(state.now());
     _name = TextEditingController(text: g?.name ?? '');
     _amount = TextEditingController(text: g == null ? '' : formatGrouped(g.amount));
-    _openingSpent = TextEditingController(text: (g == null || g.openingSpent == 0) ? '' : formatGrouped(g.openingSpent));
+    _openingSpent = TextEditingController(
+      text: (g == null || g.openingSpent == 0) ? '' : formatGrouped(g.openingSpent),
+    );
     _type = g?.type ?? GoalType.reserve;
     _categoryId = g?.categoryId;
     _month = g?.month ?? _thisMonth;
@@ -173,9 +175,9 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     final nextMonth = shiftMonth(_thisMonth, 1);
     final helper = _type == GoalType.budget
         ? 'Hạn mức chi trong tháng, vd. tiền ăn 5.000.000đ. Mỗi khoản chi thuộc danh mục sẽ trừ dần; '
-            'phần chưa chi vẫn được giữ trong mức sàn.'
+              'phần chưa chi vẫn được giữ trong mức sàn.'
         : 'Số tiền phải giữ lại trong tài khoản, vd. tiền trọ 3.000.000đ. Khi khoản chi thuộc danh mục '
-            'phát sinh (trả trọ), quỹ giảm tương ứng.';
+              'phát sinh (trả trọ), quỹ giảm tương ứng.';
 
     return Scaffold(
       appBar: AppBar(
@@ -217,11 +219,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
               const SizedBox(height: 6),
               SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment(
-                    value: GoalType.reserve,
-                    label: Text('Quỹ giữ'),
-                    icon: Icon(Icons.savings_outlined),
-                  ),
+                  ButtonSegment(value: GoalType.reserve, label: Text('Quỹ giữ'), icon: Icon(Icons.savings_outlined)),
                   ButtonSegment(
                     value: GoalType.budget,
                     label: Text('Ngân sách chi tiêu'),
@@ -232,8 +230,8 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
                 onSelectionChanged: _saving
                     ? null
                     : (s) => setState(() {
-                          _type = s.first;
-                        }),
+                        _type = s.first;
+                      }),
               ),
               const SizedBox(height: 6),
               Text(helper, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
@@ -244,11 +242,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
                 enabled: !_saving,
                 keyboardType: TextInputType.number,
                 inputFormatters: const [VndInputFormatter()],
-                decoration: const InputDecoration(
-                  labelText: 'Số tiền',
-                  suffixText: 'đ',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: 'Số tiền', suffixText: 'đ', border: OutlineInputBorder()),
                 validator: (v) {
                   final amount = parseVnd(v);
                   if (amount == null) return 'Nhập số tiền';
@@ -293,7 +287,8 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
                 inputFormatters: const [VndInputFormatter()],
                 decoration: const InputDecoration(
                   labelText: 'Đã chi trước khi dùng app (tuỳ chọn)',
-                  helperText: 'Số đã chi cho mục tiêu này trong tháng trước khi bắt đầu dùng app; '
+                  helperText:
+                      'Số đã chi cho mục tiêu này trong tháng trước khi bắt đầu dùng app; '
                       'chỉ tính cho tháng đầu tiên.',
                   helperMaxLines: 3,
                   suffixText: 'đ',
@@ -351,8 +346,16 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
         border: const OutlineInputBorder(),
       ),
       items: [
-        if (allowNone) const DropdownMenuItem<int?>(value: null, child: Text('Tiết kiệm thuần (không gắn danh mục)')),
-        for (final c in categories) DropdownMenuItem<int?>(value: c.id, child: Text(c.label)),
+        if (allowNone)
+          const DropdownMenuItem<int?>(
+            value: null,
+            child: Text('Tiết kiệm thuần (không gắn danh mục)', overflow: TextOverflow.ellipsis),
+          ),
+        for (final c in categories)
+          DropdownMenuItem<int?>(
+            value: c.id,
+            child: Text(c.label, overflow: TextOverflow.ellipsis),
+          ),
       ],
       validator: _validateCategory,
       onChanged: _saving ? null : (v) => setState(() => _categoryId = v),

@@ -6,19 +6,11 @@ import '../models/account.dart';
 import '../utils/currency.dart';
 
 /// Lựa chọn ngân hàng trong form (giá trị gửi lên API).
-const Map<String, String> bankChoices = {
-  'VCB': 'Vietcombank (VCB)',
-  'MB': 'MB Bank',
-  'OTHER': 'Khác',
-};
+const Map<String, String> bankChoices = {'VCB': 'Vietcombank (VCB)', 'MB': 'MB Bank', 'OTHER': 'Khác'};
 
 /// Mở form thêm (account == null) hoặc sửa tài khoản. Trả về TK sau khi lưu,
 /// hoặc `null` nếu huỷ / đã xoá ([AccountFormResult.deleted]).
-Future<AccountFormResult?> showAccountForm(
-  BuildContext context, {
-  required ApiClient client,
-  Account? account,
-}) {
+Future<AccountFormResult?> showAccountForm(BuildContext context, {required ApiClient client, Account? account}) {
   return showDialog<AccountFormResult>(
     context: context,
     builder: (_) => AccountFormDialog(client: client, account: account),
@@ -168,9 +160,14 @@ class _AccountFormDialogState extends State<AccountFormDialog> {
               else
                 DropdownButtonFormField<String>(
                   initialValue: _bank,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Ngân hàng'),
                   items: [
-                    for (final e in bankChoices.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
+                    for (final e in bankChoices.entries)
+                      DropdownMenuItem(
+                        value: e.key,
+                        child: Text(e.value, overflow: TextOverflow.ellipsis),
+                      ),
                   ],
                   onChanged: _saving ? null : (v) => setState(() => _bank = v ?? 'VCB'),
                 ),
@@ -316,7 +313,9 @@ class _BalanceDialogState extends State<BalanceDialog> {
           children: [
             Text(widget.account.displayName, style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 4),
-            const Text('Mở app ngân hàng và nhập đúng số dư hiện tại. Các biến động sau đó sẽ được cộng/trừ từ mốc này.'),
+            const Text(
+              'Mở app ngân hàng và nhập đúng số dư hiện tại. Các biến động sau đó sẽ được cộng/trừ từ mốc này.',
+            ),
             TextFormField(
               controller: _balance,
               autofocus: true,

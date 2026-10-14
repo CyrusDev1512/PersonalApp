@@ -68,5 +68,8 @@ List<T> asList<T>(Object? v, T Function(JsonMap json) parse) {
 
 List<String> asStringList(Object? v) {
   if (v is! List) return const <String>[];
-  return [for (final item in v) if (item != null) item.toString()];
+  return [
+    for (final item in v)
+      if (item != null) item.toString(),
+  ];
 }

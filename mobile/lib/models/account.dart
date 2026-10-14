@@ -52,25 +52,25 @@ class Account {
   }
 
   factory Account.fromJson(JsonMap json) => Account(
-        id: asInt(json['id']),
-        bank: asString(json['bank'], 'OTHER'),
-        name: asString(json['name']),
-        accountNumber: asStringOrNull(json['account_number']),
-        last4: asStringOrNull(json['last4']),
-        includeInTotal: asBool(json['include_in_total'], true),
-        confirmed: asBool(json['confirmed'], true),
-        balance: asIntOrNull(json['balance']),
-        balanceAsOf: asDateTime(json['balance_as_of']),
-        balanceDerived: asBool(json['balance_derived']),
-        manualBalance: asIntOrNull(json['manual_balance']),
-        manualBalanceAt: asDateTime(json['manual_balance_at']),
-      );
+    id: asInt(json['id']),
+    bank: asString(json['bank'], 'OTHER'),
+    name: asString(json['name']),
+    accountNumber: asStringOrNull(json['account_number']),
+    last4: asStringOrNull(json['last4']),
+    includeInTotal: asBool(json['include_in_total'], true),
+    confirmed: asBool(json['confirmed'], true),
+    balance: asIntOrNull(json['balance']),
+    balanceAsOf: asDateTime(json['balance_as_of']),
+    balanceDerived: asBool(json['balance_derived']),
+    manualBalance: asIntOrNull(json['manual_balance']),
+    manualBalanceAt: asDateTime(json['manual_balance_at']),
+  );
 }
 
 String bankLabelOf(String bank) => switch (bank.toUpperCase()) {
-      'VCB' => 'Vietcombank',
-      'MB' => 'MB Bank',
-      'CASH' => 'Tiền mặt',
-      'OTHER' => 'Khác',
-      _ => bank,
-    };
+  'VCB' => 'Vietcombank',
+  'MB' => 'MB Bank',
+  'CASH' => 'Tiền mặt',
+  'OTHER' => 'Khác',
+  _ => bank,
+};

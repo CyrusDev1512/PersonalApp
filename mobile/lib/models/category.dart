@@ -28,11 +28,11 @@ class Category {
   String get label => (icon == null || icon!.isEmpty) ? name : '$icon $name';
 
   factory Category.fromJson(JsonMap json) => Category(
-        id: asInt(json['id']),
-        name: asString(json['name']),
-        kind: asString(json['kind'], 'expense'),
-        icon: asStringOrNull(json['icon']),
-        sortOrder: asInt(json['sort_order']),
-        systemKey: asStringOrNull(json['system_key']),
-      );
+    id: asInt(json['id']),
+    name: asString(json['name']),
+    kind: asString(json['kind'], 'expense'),
+    icon: asStringOrNull(json['icon']),
+    sortOrder: asInt(json['sort_order']),
+    systemKey: asStringOrNull(json['system_key']),
+  );
 }

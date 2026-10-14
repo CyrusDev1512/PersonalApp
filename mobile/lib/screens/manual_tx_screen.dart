@@ -144,9 +144,9 @@ class _ManualTxScreenState extends State<ManualTxScreen> {
                 onSelectionChanged: _saving
                     ? null
                     : (s) => setState(() {
-                          _direction = s.first;
-                          if (!_categoryChoices.any((c) => c.id == _categoryId)) _categoryId = null;
-                        }),
+                        _direction = s.first;
+                        if (!_categoryChoices.any((c) => c.id == _categoryId)) _categoryId = null;
+                      }),
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -181,8 +181,15 @@ class _ManualTxScreenState extends State<ManualTxScreen> {
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Danh mục', border: OutlineInputBorder()),
                 items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('Chưa phân loại')),
-                  for (final c in choices) DropdownMenuItem<int?>(value: c.id, child: Text(c.label)),
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Chưa phân loại', overflow: TextOverflow.ellipsis),
+                  ),
+                  for (final c in choices)
+                    DropdownMenuItem<int?>(
+                      value: c.id,
+                      child: Text(c.label, overflow: TextOverflow.ellipsis),
+                    ),
                 ],
                 onChanged: _saving ? null : (v) => setState(() => _categoryId = v),
               ),
@@ -200,8 +207,15 @@ class _ManualTxScreenState extends State<ManualTxScreen> {
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Tài khoản', border: OutlineInputBorder()),
                 items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('Tiền mặt / ngoài ngân hàng')),
-                  for (final a in _accounts) DropdownMenuItem<int?>(value: a.id, child: Text(a.displayName)),
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Tiền mặt / ngoài ngân hàng', overflow: TextOverflow.ellipsis),
+                  ),
+                  for (final a in _accounts)
+                    DropdownMenuItem<int?>(
+                      value: a.id,
+                      child: Text(a.displayName, overflow: TextOverflow.ellipsis),
+                    ),
                 ],
                 onChanged: _saving ? null : (v) => setState(() => _accountId = v),
               ),

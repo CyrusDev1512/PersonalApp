@@ -4,20 +4,20 @@ import '../models/level.dart';
 
 /// Màu theo mức: OK xanh lá, WARNING cam, DANGER đỏ, UNKNOWN xám.
 Color levelColor(Level level) => switch (level) {
-      Level.ok => Colors.green.shade700,
-      Level.warning => Colors.orange.shade800,
-      Level.danger => Colors.red.shade700,
-      Level.unknown => Colors.blueGrey.shade600,
-      Level.info => Colors.teal.shade700,
-    };
+  Level.ok => Colors.green.shade700,
+  Level.warning => Colors.orange.shade800,
+  Level.danger => Colors.red.shade700,
+  Level.unknown => Colors.blueGrey.shade600,
+  Level.info => Colors.teal.shade700,
+};
 
 IconData levelIcon(Level level) => switch (level) {
-      Level.ok => Icons.check_circle,
-      Level.warning => Icons.warning_amber_rounded,
-      Level.danger => Icons.error,
-      Level.unknown => Icons.help,
-      Level.info => Icons.info,
-    };
+  Level.ok => Icons.check_circle,
+  Level.warning => Icons.warning_amber_rounded,
+  Level.danger => Icons.error,
+  Level.unknown => Icons.help,
+  Level.info => Icons.info,
+};
 
 /// Banner trạng thái tổng quan, tô màu theo [level], kèm lý do từ server.
 class StatusBanner extends StatelessWidget {

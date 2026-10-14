@@ -31,28 +31,27 @@ class AppSettings {
     int? expectedIncomeAmount,
     int? expectedIncomeDay,
     bool? notifyEveryTx,
-  }) =>
-      AppSettings(
-        warningPercent: warningPercent ?? this.warningPercent,
-        warningMinAmount: warningMinAmount ?? this.warningMinAmount,
-        expectedIncomeAmount: expectedIncomeAmount ?? this.expectedIncomeAmount,
-        expectedIncomeDay: expectedIncomeDay ?? this.expectedIncomeDay,
-        notifyEveryTx: notifyEveryTx ?? this.notifyEveryTx,
-      );
+  }) => AppSettings(
+    warningPercent: warningPercent ?? this.warningPercent,
+    warningMinAmount: warningMinAmount ?? this.warningMinAmount,
+    expectedIncomeAmount: expectedIncomeAmount ?? this.expectedIncomeAmount,
+    expectedIncomeDay: expectedIncomeDay ?? this.expectedIncomeDay,
+    notifyEveryTx: notifyEveryTx ?? this.notifyEveryTx,
+  );
 
   factory AppSettings.fromJson(JsonMap json) => AppSettings(
-        warningPercent: asInt(json['warning_percent'], 10),
-        warningMinAmount: asInt(json['warning_min_amount'], 500000),
-        expectedIncomeAmount: asInt(json['expected_income_amount']),
-        expectedIncomeDay: asInt(json['expected_income_day']),
-        notifyEveryTx: asBool(json['notify_every_tx'], true),
-      );
+    warningPercent: asInt(json['warning_percent'], 10),
+    warningMinAmount: asInt(json['warning_min_amount'], 500000),
+    expectedIncomeAmount: asInt(json['expected_income_amount']),
+    expectedIncomeDay: asInt(json['expected_income_day']),
+    notifyEveryTx: asBool(json['notify_every_tx'], true),
+  );
 
   JsonMap toJson() => {
-        'warning_percent': warningPercent,
-        'warning_min_amount': warningMinAmount,
-        'expected_income_amount': expectedIncomeAmount,
-        'expected_income_day': expectedIncomeDay,
-        'notify_every_tx': notifyEveryTx,
-      };
+    'warning_percent': warningPercent,
+    'warning_min_amount': warningMinAmount,
+    'expected_income_amount': expectedIncomeAmount,
+    'expected_income_day': expectedIncomeDay,
+    'notify_every_tx': notifyEveryTx,
+  };
 }

@@ -152,20 +152,27 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-            child: Row(
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
               children: [
-                IconButton(
-                  tooltip: 'Tháng trước',
-                  onPressed: () => _changeMonth(-1),
-                  icon: const Icon(Icons.chevron_left),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Tháng trước',
+                      onPressed: () => _changeMonth(-1),
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+                    Text(monthLabel(_month), style: Theme.of(context).textTheme.titleSmall),
+                    IconButton(
+                      tooltip: 'Tháng sau',
+                      onPressed: canGoNext ? () => _changeMonth(1) : null,
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                  ],
                 ),
-                Text(monthLabel(_month), style: Theme.of(context).textTheme.titleSmall),
-                IconButton(
-                  tooltip: 'Tháng sau',
-                  onPressed: canGoNext ? () => _changeMonth(1) : null,
-                  icon: const Icon(Icons.chevron_right),
-                ),
-                const Spacer(),
                 FilterChip(
                   key: const Key('filter_uncategorized'),
                   label: const Text('Chưa phân loại'),
@@ -218,10 +225,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     child: Center(
                       child: _loadingMore
                           ? const CircularProgressIndicator()
-                          : OutlinedButton(
-                              onPressed: _loadMore,
-                              child: Text('Tải thêm (${_total - _items.length})'),
-                            ),
+                          : OutlinedButton(onPressed: _loadMore, child: Text('Tải thêm (${_total - _items.length})')),
                     ),
                   );
                 }
@@ -247,17 +251,15 @@ class TxTile extends StatelessWidget {
     final amountColor = tx.isExcluded
         ? scheme.outline
         : tx.isOut
-            ? Colors.red.shade700
-            : Colors.green.shade700;
+        ? Colors.red.shade700
+        : Colors.green.shade700;
     final meta = [
       if (tx.accountName != null && tx.accountName!.isNotEmpty) tx.accountName!,
       if (tx.bankTime != null) formatShortDateTime(tx.bankTime!),
       if (tx.sources.isNotEmpty) tx.sources.join(', '),
     ].join(' · ');
 
-    final categoryLabel = tx.categoryName == null
-        ? null
-        : '${tx.categoryIcon ?? ''} ${tx.categoryName}'.trim();
+    final categoryLabel = tx.categoryName == null ? null : '${tx.categoryIcon ?? ''} ${tx.categoryName}'.trim();
 
     return ListTile(
       onTap: onTap,
@@ -268,11 +270,23 @@ class TxTile extends StatelessWidget {
           style: const TextStyle(fontSize: 18),
         ),
       ),
-      title: Text(
-        tx.title,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: tx.isExcluded ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
+      title: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              tx.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: tx.isExcluded ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            formatSignedVnd(tx.amount, outgoing: tx.isOut),
+            style: theme.textTheme.titleSmall?.copyWith(color: amountColor, fontWeight: FontWeight.w700),
+          ),
+        ],
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,11 +312,6 @@ class TxTile extends StatelessWidget {
             ],
           ),
         ],
-      ),
-      isThreeLine: true,
-      trailing: Text(
-        formatSignedVnd(tx.amount, outgoing: tx.isOut),
-        style: theme.textTheme.titleSmall?.copyWith(color: amountColor, fontWeight: FontWeight.w700),
       ),
     );
   }

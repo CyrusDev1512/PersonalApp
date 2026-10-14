@@ -22,10 +22,10 @@ enum Level {
 
   /// Nhãn hiển thị theo docs/api.md.
   String get label => switch (this) {
-        Level.ok => 'An toàn',
-        Level.warning => 'Sắp chạm mức mục tiêu',
-        Level.danger => 'Đã lấn vào tiền dành cho mục tiêu',
-        Level.unknown => 'Chưa biết số dư',
-        Level.info => 'Thông tin',
-      };
+    Level.ok => 'An toàn',
+    Level.warning => 'Sắp chạm mức mục tiêu',
+    Level.danger => 'Đã lấn vào tiền dành cho mục tiêu',
+    Level.unknown => 'Chưa biết số dư',
+    Level.info => 'Thông tin',
+  };
 }

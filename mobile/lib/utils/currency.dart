@@ -17,8 +17,7 @@ String formatGrouped(int amount) {
 String formatVnd(int amount) => '${formatGrouped(amount)}đ';
 
 /// Số tiền có dấu theo chiều giao dịch: chi "−3.500.000đ", thu "+3.500.000đ".
-String formatSignedVnd(int amount, {required bool outgoing}) =>
-    '${outgoing ? '−' : '+'}${formatVnd(amount.abs())}';
+String formatSignedVnd(int amount, {required bool outgoing}) => '${outgoing ? '−' : '+'}${formatVnd(amount.abs())}';
 
 /// `null` -> "—" (chưa biết), còn lại như [formatVnd].
 String formatVndOrDash(int? amount) => amount == null ? '—' : formatVnd(amount);
@@ -71,6 +70,9 @@ class VndInputFormatter extends TextInputFormatter {
       final code = formatted.codeUnitAt(pos);
       if (code >= 0x30 && code <= 0x39) seen++;
     }
-    return TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: pos));
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: pos),
+    );
   }
 }

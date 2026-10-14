@@ -121,11 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final client = _client;
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => ConnectScreen(
-          initialUrl: client?.baseUrl,
-          initialToken: client?.token,
-          popOnSuccess: true,
-        ),
+        builder: (_) => ConnectScreen(initialUrl: client?.baseUrl, initialToken: client?.token, popOnSuccess: true),
       ),
     );
     if (changed == true && mounted) {
@@ -209,10 +205,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              ErrorView(message: _error!, onRetry: _load),
-            ],
+            if (_error != null) ...[const SizedBox(height: 12), ErrorView(message: _error!, onRetry: _load)],
             SectionHeader(
               'Tài khoản',
               trailing: TextButton.icon(
@@ -254,7 +247,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: Text(
                 [
                   a.bankLabel,
-                  a.balanceKnown ? '${formatVnd(a.balance!)}${a.balanceDerived ? ' (ước tính)' : ''}' : 'chưa biết số dư',
+                  a.balanceKnown
+                      ? '${formatVnd(a.balance!)}${a.balanceDerived ? ' (ước tính)' : ''}'
+                      : 'chưa biết số dư',
                   if (!a.includeInTotal) 'không tính vào tổng',
                 ].join(' · '),
               ),
@@ -351,10 +346,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       controller: _incomeDay,
                       enabled: !_saving,
                       keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(2),
-                      ],
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
                       decoration: const InputDecoration(labelText: 'Ngày nhận', border: OutlineInputBorder()),
                       validator: (v) {
                         final amount = parseVnd(_incomeAmount.text) ?? 0;

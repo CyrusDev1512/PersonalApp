@@ -27,7 +27,8 @@ abstract final class ApiMessages {
   static const unauthorized = 'Sai token (401). Kiểm tra lại APP_TOKEN của máy chủ trong Cài đặt.';
   static const network = 'Không kết nối được máy chủ. Kiểm tra mạng, địa chỉ máy chủ và máy chủ có đang chạy không.';
   static const timeout = 'Máy chủ không phản hồi sau 15 giây. Thử lại sau.';
-  static const invalidUrl = 'Địa chỉ máy chủ không hợp lệ. Ví dụ: https://finance.example.com hoặc http://192.168.1.10:8000';
+  static const invalidUrl =
+      'Địa chỉ máy chủ không hợp lệ. Ví dụ: https://finance.example.com hoặc http://192.168.1.10:8000';
   static const badResponse = 'Máy chủ trả dữ liệu không hợp lệ.';
 }
 
@@ -38,8 +39,8 @@ class ApiClient {
     required this.token,
     http.Client? client,
     this.timeout = const Duration(seconds: 15),
-  })  : baseUrl = normalizeBaseUrl(baseUrl),
-        _http = client ?? http.Client();
+  }) : baseUrl = normalizeBaseUrl(baseUrl),
+       _http = client ?? http.Client();
 
   /// URL gốc đã chuẩn hoá (không có "/" ở cuối).
   final String baseUrl;
@@ -186,16 +187,16 @@ class ApiClient {
 
   // ----------------------------------------------------------------- summary
 
-  Future<Summary> getSummary({String? month}) async => Summary.fromJson(
-        _map(await _request('GET', '/api/summary', query: {if (month != null) 'month': month})),
-      );
+  /// JSON thô của GET /api/summary (app lưu lại để xem khi offline).
+  Future<JsonMap> getSummaryJson({String? month}) async =>
+      _map(await _request('GET', '/api/summary', query: {'month': ?month}));
+
+  Future<Summary> getSummary({String? month}) async => Summary.fromJson(await getSummaryJson(month: month));
 
   // ------------------------------------------------------------------- goals
 
-  Future<List<GoalView>> listGoals({String? month}) async => _list(
-        await _request('GET', '/api/goals', query: {if (month != null) 'month': month}),
-        GoalView.fromJson,
-      );
+  Future<List<GoalView>> listGoals({String? month}) async =>
+      _list(await _request('GET', '/api/goals', query: {'month': ?month}), GoalView.fromJson);
 
   Future<GoalView> createGoal(GoalInput input) async =>
       GoalView.fromJson(_map(await _request('POST', '/api/goals', body: input.toJson())));
@@ -218,26 +219,22 @@ class ApiClient {
   }
 
   Future<Category> createCategory({required String name, String kind = 'expense', String? icon}) async =>
-      Category.fromJson(_map(await _request('POST', '/api/categories', body: {
-        'name': name,
-        'kind': kind,
-        if (icon != null) 'icon': icon,
-      })));
+      Category.fromJson(
+        _map(await _request('POST', '/api/categories', body: {'name': name, 'kind': kind, 'icon': ?icon})),
+      );
 
   // ------------------------------------------------------------ transactions
 
-  Future<TxPage> listTransactions({
-    String? month,
-    bool uncategorized = false,
-    int limit = 50,
-    int offset = 0,
-  }) async =>
-      TxPage.fromJson(_map(await _request('GET', '/api/transactions', query: {
-        if (month != null) 'month': month,
-        'uncategorized': '$uncategorized',
-        'limit': '$limit',
-        'offset': '$offset',
-      })));
+  Future<TxPage> listTransactions({String? month, bool uncategorized = false, int limit = 50, int offset = 0}) async =>
+      TxPage.fromJson(
+        _map(
+          await _request(
+            'GET',
+            '/api/transactions',
+            query: {'month': ?month, 'uncategorized': '$uncategorized', 'limit': '$limit', 'offset': '$offset'},
+          ),
+        ),
+      );
 
   /// Body là tập con của: `category_id`, `goal_id`, `for_next_month`, `excluded`,
   /// `remember_rule`, `rule_pattern`. Trả giao dịch mới kèm tổng quan đã tính lại.
@@ -253,16 +250,23 @@ class ApiClient {
     DateTime? bankTime,
     int? accountId,
     bool affectsBalance = false,
-  }) async =>
-      Tx.fromJson(_map(await _request('POST', '/api/transactions', body: {
-        'direction': direction,
-        'amount': amount,
-        'description': description,
-        'category_id': categoryId,
-        if (bankTime != null) 'bank_time': bankTime.toUtc().toIso8601String(),
-        'account_id': accountId,
-        'affects_balance': affectsBalance,
-      })));
+  }) async => Tx.fromJson(
+    _map(
+      await _request(
+        'POST',
+        '/api/transactions',
+        body: {
+          'direction': direction,
+          'amount': amount,
+          'description': description,
+          'category_id': categoryId,
+          if (bankTime != null) 'bank_time': bankTime.toUtc().toIso8601String(),
+          'account_id': accountId,
+          'affects_balance': affectsBalance,
+        },
+      ),
+    ),
+  );
 
   /// Chỉ xoá được giao dịch nhập tay.
   Future<void> deleteTransaction(int id) async {
@@ -279,14 +283,21 @@ class ApiClient {
     String? accountNumber,
     bool includeInTotal = true,
     int? balance,
-  }) async =>
-      Account.fromJson(_map(await _request('POST', '/api/accounts', body: {
-        'bank': bank,
-        'name': name,
-        if (accountNumber != null && accountNumber.isNotEmpty) 'account_number': accountNumber,
-        'include_in_total': includeInTotal,
-        if (balance != null) 'balance': balance,
-      })));
+  }) async => Account.fromJson(
+    _map(
+      await _request(
+        'POST',
+        '/api/accounts',
+        body: {
+          'bank': bank,
+          'name': name,
+          if (accountNumber != null && accountNumber.isNotEmpty) 'account_number': accountNumber,
+          'include_in_total': includeInTotal,
+          'balance': ?balance,
+        },
+      ),
+    ),
+  );
 
   /// Tập con của `name`, `account_number`, `include_in_total`, `confirmed`, `balance`.
   Future<Account> updateAccount(int id, JsonMap changes) async =>
@@ -301,13 +312,10 @@ class ApiClient {
 
   // ------------------------------------------------------------------ alerts
 
-  Future<List<Alert>> listAlerts({bool unread = false, int limit = 50}) async => _list(
-        await _request('GET', '/api/alerts', query: {'unread': '$unread', 'limit': '$limit'}),
-        Alert.fromJson,
-      );
+  Future<List<Alert>> listAlerts({bool unread = false, int limit = 50}) async =>
+      _list(await _request('GET', '/api/alerts', query: {'unread': '$unread', 'limit': '$limit'}), Alert.fromJson);
 
-  Future<Alert> markAlertRead(int id) async =>
-      Alert.fromJson(_map(await _request('POST', '/api/alerts/$id/read')));
+  Future<Alert> markAlertRead(int id) async => Alert.fromJson(_map(await _request('POST', '/api/alerts/$id/read')));
 
   /// Trả số cảnh báo được đánh dấu.
   Future<int> markAllAlertsRead() async {

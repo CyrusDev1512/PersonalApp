@@ -18,14 +18,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   AppState({
     ApiClient? client,
     ApiClientFactory? clientFactory,
-    ConnectionStore store = const ConnectionStore(),
+    this.store = const ConnectionStore(),
     this.refreshInterval = const Duration(seconds: 30),
     DateTime Function()? clock,
-  })  : _client = client,
-        _initialized = client != null,
-        _factory = clientFactory ?? _defaultFactory,
-        _store = store,
-        now = clock ?? DateTime.now {
+  }) : _client = client,
+       _initialized = client != null,
+       _factory = clientFactory ?? _defaultFactory,
+       now = clock ?? DateTime.now {
     if (refreshInterval != null) {
       WidgetsBinding.instance.addObserver(this);
       _observing = true;
@@ -39,7 +38,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   final DateTime Function() now;
 
   final ApiClientFactory _factory;
-  final ConnectionStore _store;
+
+  /// Nơi lưu URL/token (shared_preferences).
+  final ConnectionStore store;
 
   ApiClient? _client;
   bool _initialized;
@@ -81,7 +82,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
     ConnectionInfo? info;
     try {
-      info = await _store.load();
+      info = await store.load();
     } catch (_) {
       info = null;
     }
@@ -90,6 +91,19 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         _client = _factory(info.baseUrl, info.token);
       } on ApiException {
         _client = null;
+      }
+    }
+    final client = _client;
+    if (client != null) {
+      // Hiện ngay bản tổng quan gần nhất (dùng được cả khi offline), rồi tải mới.
+      try {
+        final cached = await store.loadSummary(client.baseUrl);
+        if (cached != null) {
+          _summary = Summary.fromJson(cached.json);
+          _lastLoadedAt = cached.loadedAt;
+        }
+      } catch (_) {
+        // Cache hỏng: bỏ qua.
       }
     }
     _initialized = true;
@@ -101,11 +115,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Lưu kết nối đã kiểm tra và chuyển sang dùng [client].
-  Future<void> connect(ApiClient client, {Summary? summary}) async {
-    await _store.save(ConnectionInfo(baseUrl: client.baseUrl, token: client.token));
+  /// [summaryJson]: tổng quan vừa tải khi kiểm tra (tránh gọi lại).
+  Future<void> connect(ApiClient client, {JsonMap? summaryJson}) async {
+    await store.save(ConnectionInfo(baseUrl: client.baseUrl, token: client.token));
     _setClient(client);
-    if (summary != null) {
-      _applyLoaded(summary);
+    if (summaryJson != null) {
+      _applyLoaded(Summary.fromJson(summaryJson));
+      unawaited(_saveCache(client.baseUrl, summaryJson));
     } else {
       unawaited(load());
     }
@@ -113,7 +129,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Xoá kết nối đã lưu (quay về màn "Kết nối máy chủ").
   Future<void> disconnect() async {
-    await _store.clear();
+    await store.clear();
     _setClient(null);
   }
 
@@ -141,9 +157,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _loading = true;
     _notify();
     try {
-      final s = await client.getSummary();
+      final raw = await client.getSummaryJson();
+      final s = Summary.fromJson(raw);
       if (generation != _generation) return;
       _applyLoaded(s);
+      unawaited(_saveCache(client.baseUrl, raw));
     } on ApiException catch (e) {
       if (generation != _generation) return;
       _error = e;
@@ -164,6 +182,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _error = null;
     _lastLoadedAt = now();
     _notify();
+  }
+
+  Future<void> _saveCache(String baseUrl, JsonMap raw) async {
+    try {
+      await store.saveSummary(baseUrl, _lastLoadedAt ?? now(), raw);
+    } catch (_) {
+      // Không lưu được cache thì thôi, không ảnh hưởng app.
+    }
   }
 
   /// Dùng tổng quan server trả kèm (vd. sau PATCH giao dịch) thay vì tải lại.

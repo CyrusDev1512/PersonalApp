@@ -55,10 +55,7 @@ class _HomeShellState extends State<HomeShell> {
     final unread = context.select<AppState, int>((s) => s.summary?.unreadAlerts ?? 0);
     final body = switch (_index) {
       0 => DashboardScreen(onOpenUncategorized: _openUncategorized, onOpenAlerts: () => _select(2)),
-      1 => TransactionsScreen(
-          key: ValueKey('tx_$_txUncategorized'),
-          initialUncategorized: _txUncategorized,
-        ),
+      1 => TransactionsScreen(key: ValueKey('tx_$_txUncategorized'), initialUncategorized: _txUncategorized),
       2 => const AlertsScreen(),
       _ => const SettingsScreen(),
     };
