@@ -41,6 +41,12 @@ Rút ATM 3,5tr → số dư 6,5tr → chỉ còn 500k trên mức sàn → **⚠
 Chống làm phiền: chỉ báo khi trạng thái xấu đi (có ngưỡng trễ để không báo đi báo lại khi số dư dao động), mỗi giao dịch chỉ
 một tin; bấm nút phân loại thì tin cũ được sửa tại chỗ. Bản tin tổng hợp gửi lúc 08:00 mỗi sáng.
 
+**Dự báo cuối tháng**: dựa trên tốc độ chi *ngoài mục tiêu* 14 ngày gần nhất (khoản chi lớn bất thường được giới hạn
+để không làm méo dự báo, đầu tháng thì trộn với số liệu tháng trước) và nhịp chi của từng ngân sách, app ước tính
+"được tiêu" cuối tháng, ngày có thể chạm mức sàn và mức nên chi mỗi ngày — ví dụ *"Chi như hiện tại thì khoảng ngày
+25/10 sẽ chạm mức sàn — gợi ý chi ngoài mục tiêu tối đa ~120.000đ/ngày"*. Khi dự kiến chạm mức sàn trong vòng 7 ngày,
+hệ thống chủ động cảnh báo sớm (một lần, báo lại nếu ngày chạm sàn sớm hơn đáng kể).
+
 Một số tình huống được xử lý sẵn:
 - **Chuyển tiền giữa VCB ↔ MB** của chính bạn được ghép cặp, không bị tính là chi tiêu.
 - **Trả trọ tháng sau từ sớm** (vd. 30/10): bấm "📅 Tính cho tháng sau" để khoản đó tính cho mục tiêu tháng 11.
@@ -129,7 +135,28 @@ Hoặc chạy workflow **CI** trên GitHub (*Actions → CI → Run workflow*) �
 Lần đầu mở app: nhập **địa chỉ server** (vd. `https://finance.tenmien.com`) và **APP_TOKEN** → vào *Cài đặt → Tài khoản*
 thêm TK VCB/MB và **số dư hiện tại** → bấm **"Thêm mục tiêu"** trên màn hình Tổng quan.
 
-## 6. Thử nhanh không cần ngân hàng
+## 6. Thông báo đẩy vào app (Firebase, tuỳ chọn)
+
+Telegram đã đẩy cảnh báo về điện thoại; nếu muốn cảnh báo hiện thẳng thành thông báo của app "Chi tiêu":
+
+1. Vào [Firebase console](https://console.firebase.google.com) → tạo project (miễn phí).
+2. *Add app → Android*, package name: `com.personalapp.personal_finance`. Tải **`google-services.json`** và đặt vào
+   `mobile/android/app/google-services.json` (file này đã được `.gitignore`, không commit), rồi build lại APK.
+   Không có file này app vẫn chạy bình thường, chỉ tắt thông báo đẩy.
+3. Kiểm tra *Project settings → Cloud Messaging*: **Firebase Cloud Messaging API (V1)** đang bật.
+4. Tạo khoá cho server: *Project settings → Service accounts → Generate new private key* (hoặc tạo service account riêng
+   trong Google Cloud chỉ với quyền *Firebase Cloud Messaging API Admin*). Lưu thành `secrets/fcm.json` cạnh
+   `docker-compose.yml`, cho user trong container đọc được: `chmod 644 secrets/fcm.json`.
+5. Trong `.env`: `FCM_SERVICE_ACCOUNT_FILE=/run/secrets/fcm.json` → `docker compose up -d`.
+6. Mở app → *Cài đặt → Thông báo đẩy* → cho phép thông báo → bấm **Gửi thử**.
+
+Lưu ý:
+- Chỉ các cảnh báo quan trọng (loại có chuông trên Telegram) mới được đẩy; Telegram vẫn chạy song song.
+- Một số máy Xiaomi/Oppo/Vivo chặn thông báo khi app chạy nền: bật *Tự khởi động* và tắt *Tối ưu pin* cho app.
+- Nội dung thông báo đi qua máy chủ của Google (FCM).
+- iOS cần tài khoản Apple Developer, khoá APNs (.p8) tải lên Firebase và `GoogleService-Info.plist` — chưa làm sẵn.
+
+## 7. Thử nhanh không cần ngân hàng
 
 ```bash
 cd backend
@@ -140,7 +167,7 @@ export BASE_URL=http://127.0.0.1:8000 APP_TOKEN=... SEPAY_API_KEY=...
     --amount 15000000 --balance 21500000 --content "CTY ABC tra luong"   # → ✅ an toàn trở lại (cần CASSO_SECURE_KEY)
 ```
 
-## 7. Sao lưu
+## 8. Sao lưu
 
 ```bash
 docker compose exec app python -c "import sqlite3; s=sqlite3.connect('/data/app.db'); d=sqlite3.connect('/data/backup.db'); s.backup(d)"
