@@ -124,17 +124,29 @@ async def drain_push_once(fcm: FcmClient) -> int:
     async with write_lock:
         now = clock.now()
         with session_scope() as s:
+            config_error: str | None = None
+            any_ok = False
             for job, err in results:
                 d = s.get(PushDelivery, job.delivery_id)
                 if d is None:
                     continue
+                device = s.get(Device, job.device_id)
                 if err is None:
                     ok += 1
+                    any_ok = True
                     d.status, d.sent_at, d.last_error = "sent", now, None
+                    if device is not None and device.last_error:
+                        device.last_error = None
+                        s.add(device)
                     s.add(d)
                     continue
                 d.attempts += 1
                 d.last_error = err.message[:300]
+                if err.config_error:
+                    config_error = err.message
+                elif device is not None and not err.dead_token:
+                    device.last_error = err.message[:300]
+                    s.add(device)
                 if err.dead_token:
                     _drop_device(s, job.device_id, err.message)
                     d.status = "dropped"
@@ -145,6 +157,12 @@ async def drain_push_once(fcm: FcmClient) -> int:
                     d.status = "failed"
                 log.warning("Gửi push thất bại (delivery %s): %s", d.id, err.message)
                 s.add(d)
+            # Lỗi cấu hình (khoá, project, API chưa bật) hiện cho người dùng qua GET /api/devices
+            if config_error is not None:
+                kv_set(s, "health:push", {"error": f"Gửi thông báo đẩy lỗi: {config_error}"[:300],
+                                          "at": clock.iso_z(now)})
+            elif any_ok and (kv_get(s, "health:push", {}) or {}).get("error"):
+                kv_set(s, "health:push", {"error": None, "at": clock.iso_z(now)})
             s.commit()
     return ok
 

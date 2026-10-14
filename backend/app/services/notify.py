@@ -22,6 +22,7 @@ from app.engine.messages import (
     compose_floor_message,
     compose_forecast_message,
     compose_tx_message,
+    forecast_lines,
 )
 from app.models import Account, Alert, AlertState, Category, Goal, Transaction
 from app.services import runtime_settings
@@ -271,15 +272,19 @@ def _separate_alerts(
     deliver: bool,
     forecast: Forecast | None = None,
 ) -> None:
-    if forecast is not None:
-        title, message = compose_forecast_message(forecast, ev)
-        _add_alert(session, kind="forecast", level="WARNING", month=ev.month, title=title, message=message,
-                   snapshot_json=snap, deliver_telegram=deliver)
+    merge_forecast = forecast is not None and dec.notify and deliver
     if dec.notify:
         title, message = compose_floor_message(dec, ev, REASON_LABELS.get(reason))
+        if merge_forecast:
+            message += "\n" + "\n".join(forecast_lines(forecast))  # gộp, không gửi thêm tin dự báo riêng
         kind = "safe" if dec.kind == "safe" else "floor"
         _add_alert(session, kind=kind, level=dec.level, month=ev.month, title=title, message=message,
                    snapshot_json=snap, deliver_telegram=deliver)
+    if forecast is not None and not merge_forecast:
+        # Tin sửa tại chỗ thì im lặng, nên cảnh báo dự báo luôn được gửi thành tin riêng (có chuông)
+        title, message = compose_forecast_message(forecast, ev)
+        _add_alert(session, kind="forecast", level="WARNING", month=ev.month, title=title, message=message,
+                   snapshot_json=snap, deliver_telegram=True)
     for goal, th in budget_fired:
         title, message = compose_budget_message(goal, th, ev)
         _add_alert(session, kind="budget", level="WARNING", month=ev.month, goal_id=goal.id, title=title,

@@ -11,6 +11,8 @@ from typing import Any
 
 import httpx
 import jwt
+from cryptography.exceptions import UnsupportedAlgorithm
+from cryptography.hazmat.primitives import serialization
 
 from app.config import Settings
 
@@ -18,8 +20,10 @@ SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 TOKEN_REFRESH_MARGIN = 300  # làm mới access token trước khi hết hạn 5 phút
 
-# Lỗi cho biết token thiết bị không còn dùng được -> xoá thiết bị
-DEAD_TOKEN_CODES = {"UNREGISTERED", "SENDER_ID_MISMATCH"}
+# Lỗi cho biết token thiết bị không còn dùng được -> xoá thiết bị.
+# (SENDER_ID_MISMATCH thường là cấu hình sai project Firebase -> báo lỗi cấu hình, KHÔNG xoá thiết bị.)
+DEAD_TOKEN_CODES = {"UNREGISTERED"}
+CONFIG_ERROR_CODES = {"SENDER_ID_MISMATCH", "PERMISSION_DENIED", "THIRD_PARTY_AUTH_ERROR"}
 
 
 class FcmConfigError(Exception):
@@ -28,16 +32,19 @@ class FcmConfigError(Exception):
 
 class FcmError(Exception):
     def __init__(self, message: str, *, status: int | None = None, code: str | None = None,
-                 retry_after: int | None = None, dead_token: bool = False):
+                 retry_after: int | None = None, dead_token: bool = False, config_error: bool = False):
         super().__init__(message)
         self.message = message
         self.status = status
         self.code = code
         self.retry_after = retry_after
         self.dead_token = dead_token
+        self.config_error = config_error  # lỗi cấu hình phía server (khoá, project, API chưa bật)
 
     @property
     def retryable(self) -> bool:
+        if self.config_error:
+            return False
         return self.status is None or self.status == 429 or self.status >= 500
 
 
@@ -52,11 +59,21 @@ class ServiceAccount:
     @classmethod
     def from_dict(cls, data: dict) -> ServiceAccount:
         try:
-            return cls(client_email=data["client_email"], private_key=data["private_key"],
-                       private_key_id=data.get("private_key_id"), project_id=data.get("project_id", ""),
-                       token_uri=data.get("token_uri") or DEFAULT_TOKEN_URI)
+            sa = cls(client_email=data["client_email"], private_key=data["private_key"],
+                     private_key_id=data.get("private_key_id"), project_id=data.get("project_id", ""),
+                     token_uri=data.get("token_uri") or DEFAULT_TOKEN_URI)
         except (KeyError, TypeError) as exc:
             raise FcmConfigError(f"Service account thiếu trường {exc}") from None
+        if not isinstance(sa.private_key, str) or not isinstance(sa.client_email, str):
+            raise FcmConfigError("Service account sai định dạng")
+        # Khoá dán tay hay bị escape 2 lần ("\\n" thay vì xuống dòng)
+        if "\\n" in sa.private_key and "\n" not in sa.private_key.strip():
+            sa.private_key = sa.private_key.replace("\\n", "\n")
+        try:
+            serialization.load_pem_private_key(sa.private_key.encode(), password=None)
+        except (ValueError, TypeError, UnsupportedAlgorithm):
+            raise FcmConfigError("private_key của service account không hợp lệ") from None
+        return sa
 
     @classmethod
     def load(cls, settings: Settings) -> ServiceAccount:
@@ -64,15 +81,19 @@ class ServiceAccount:
             raw = settings.fcm_service_account_json
         elif settings.fcm_service_account_file:
             try:
-                raw = Path(settings.fcm_service_account_file).read_text(encoding="utf-8")
+                raw = Path(settings.fcm_service_account_file).read_text(encoding="utf-8-sig")
             except OSError as exc:
                 raise FcmConfigError(f"Không đọc được file service account: {exc.strerror}") from None
+            except UnicodeError:
+                raise FcmConfigError("File service account phải là JSON mã hoá UTF-8") from None
         else:
             raise FcmConfigError("Chưa cấu hình FCM")
         try:
-            data = json.loads(raw)
+            data = json.loads(raw.lstrip("\ufeff"))
         except ValueError:
             raise FcmConfigError("Service account không phải JSON hợp lệ") from None
+        if not isinstance(data, dict):
+            raise FcmConfigError("Service account không phải JSON object")
         return cls.from_dict(data)
 
 
@@ -96,7 +117,9 @@ def _parse_error(resp: httpx.Response) -> FcmError:
             if isinstance(violation, dict) and str(violation.get("field", "")).startswith("message.token"):
                 dead = True
     dead = dead or code in DEAD_TOKEN_CODES
-    return FcmError(message[:300], status=status, code=code, retry_after=retry, dead_token=dead)
+    config = code in CONFIG_ERROR_CODES or status in (401, 403)
+    return FcmError(message[:300], status=status, code=code, retry_after=retry, dead_token=dead and not config,
+                    config_error=config)
 
 
 class FcmClient:
@@ -125,15 +148,24 @@ class FcmClient:
             if not force and self._token and now < self._token_exp - TOKEN_REFRESH_MARGIN:
                 return self._token
             try:
+                assertion = self._assertion(now)
+            except Exception as exc:  # noqa: BLE001 - khoá hỏng: lỗi cấu hình, không thử lại vô hạn
+                raise FcmError(f"Không ký được JWT: {type(exc).__name__}", config_error=True) from None
+            try:
                 resp = await self._client.post(self.sa.token_uri, data={
-                    "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": self._assertion(now)})
+                    "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": assertion})
             except httpx.HTTPError as exc:
                 raise FcmError(f"network: {type(exc).__name__}") from None
             if resp.status_code != 200:
-                raise FcmError(f"OAuth token lỗi HTTP {resp.status_code}", status=resp.status_code)
-            data = resp.json()
-            self._token = data["access_token"]
-            self._token_exp = now + int(data.get("expires_in", 3600))
+                retryable = resp.status_code == 429 or resp.status_code >= 500
+                raise FcmError(f"OAuth token lỗi HTTP {resp.status_code}", status=resp.status_code,
+                               config_error=not retryable)
+            try:
+                data = resp.json()
+                self._token = str(data["access_token"])
+                self._token_exp = now + int(data.get("expires_in", 3600))
+            except (ValueError, KeyError, TypeError):
+                raise FcmError("OAuth token trả về sai định dạng", status=resp.status_code) from None
             return self._token
 
     async def send(self, message: dict[str, Any]) -> str:
@@ -149,7 +181,10 @@ class FcmClient:
             if resp.status_code == 401 and attempt == 0:
                 continue  # access token hết hạn sớm: lấy token mới rồi thử lại một lần
             if resp.status_code == 200:
-                return str(resp.json().get("name", ""))
+                try:
+                    return str(resp.json().get("name", ""))
+                except ValueError:
+                    return ""
             raise _parse_error(resp)
         raise FcmError("Không xác thực được với FCM", status=401)
 

@@ -51,6 +51,9 @@ def _make_fcm(cfg):
     except FcmConfigError as exc:
         fcm, error = None, str(exc)
         log.warning("Thông báo đẩy tắt: %s", error)
+    except Exception as exc:  # noqa: BLE001 - cấu hình push hỏng không bao giờ được làm sập server
+        fcm, error = None, f"Không nạp được cấu hình Firebase ({type(exc).__name__})"
+        log.exception("Thông báo đẩy tắt")
     with session_scope() as s:
         kv_set(s, "health:push", {"error": error})
         s.commit()

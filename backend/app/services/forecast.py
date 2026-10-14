@@ -40,6 +40,23 @@ def _outflows(session: Session, month: str, included: set[int], now: datetime) -
     ]
 
 
+def _refunds(session: Session, month: str, included: set[int], now: datetime) -> list[OutflowIn]:
+    """Khoản tiền hoàn lại (danh mục Hoàn tiền) — bù vào chi tiêu ngoài mục tiêu khi tính tốc độ chi."""
+    refund_ids = {c.id for c in session.exec(select(Category)).all() if c.system_key == "refund"}
+    if not refund_ids:
+        return []
+    start, end = clock.month_bounds_utc(month)
+    rows = session.exec(
+        select(Transaction).where(
+            Transaction.direction == "in", Transaction.status == "active", Transaction.category_id.in_(refund_ids),
+            Transaction.account_id.in_(included), Transaction.bank_time >= start, Transaction.bank_time < end,
+            Transaction.goal_id == None,  # noqa: E711
+        )
+    ).all()
+    return [OutflowIn(id=t.id, amount=t.amount, day=clock.to_ict(t.bank_time).date()) for t in rows
+            if t.affects_balance and t.bank_time <= now]
+
+
 def _data_since(session: Session, accounts: list[Account], today: date) -> date:
     candidates = [clock.to_ict(a.created_at).date() for a in accounts if a.created_at is not None]
     ids = [a.id for a in accounts]
@@ -78,6 +95,7 @@ def build_forecast(session: Session, ev: Evaluation, now: datetime | None = None
     rs = runtime_settings.load(session)
     return forecast(
         ev=ev, outflows=_outflows(session, ev.month, included, now), today=today, data_since=data_since,
-        income_day=rs.expected_income_day, baseline_rate=_baseline_rate(session, ev.month, included, data_since,
-                                                                        now, cfg), cfg=cfg,
+        income_day=rs.expected_income_day,
+        baseline_rate=_baseline_rate(session, ev.month, included, data_since, now, cfg),
+        refunds=_refunds(session, ev.month, included, now), cfg=cfg,
     )

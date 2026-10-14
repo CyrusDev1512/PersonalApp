@@ -76,40 +76,50 @@ def _ddmm(d: date) -> str:
     return d.strftime("%d/%m")
 
 
-def capped_total(amounts: list[int], cfg: ForecastCfg) -> tuple[int, int, int]:
-    """(tổng đã giới hạn khoản lớn, phần bị bỏ, số khoản bị giới hạn)."""
+def capped_total(amounts: list[int], cfg: ForecastCfg, floor_cap: int | None = None) -> tuple[int, int, int]:
+    """(tổng đã giới hạn khoản lớn, phần bị bỏ, số khoản bị giới hạn).
+
+    Trần = max(floor_cap, 3 × trung vị). Có ít hơn 3 khoản thì trung vị chính là khoản lớn đó -> chỉ dùng floor_cap.
+    """
     if not amounts:
         return 0, 0, 0
-    cap = max(cfg.large_min, cfg.large_median_factor * int(statistics.median(amounts)))
+    floor_cap = cfg.large_min if floor_cap is None else floor_cap
+    median_cap = cfg.large_median_factor * int(statistics.median(amounts)) if len(amounts) >= 3 else 0
+    cap = max(floor_cap, median_cap)
     counted = sum(min(a, cap) for a in amounts)
     excess = sum(a - cap for a in amounts if a > cap)
     return counted, excess, sum(1 for a in amounts if a > cap)
 
 
-def _budget_paces(goals: list[GoalView], *, month_start: date, today: date, observed: int, data_since: date,
-                  days_left: int, dim: int, remaining_days: int, cfg: ForecastCfg) -> list[tuple[BudgetPace, float]]:
-    out: list[tuple[BudgetPace, float]] = []
+def _budget_paces(goals: list[GoalView], outflows: list[OutflowIn], *, month_start: date, today: date,
+                  observed: int, days_left: int, dim: int, remaining_days: int,
+                  cfg: ForecastCfg) -> list[tuple[BudgetPace, float, bool]]:
+    """(nhịp từng ngân sách, tốc độ/ngày, có đủ dữ liệu để tính phần vượt vào dự báo không)."""
+    out: list[tuple[BudgetPace, float, bool]] = []
     for g in goals:
         if g.type != "budget" or g.amount <= 0:
             continue
-        from_month_start = g.opening_spent > 0 or data_since <= month_start
-        b_days = (today - month_start).days + 1 if from_month_start else observed
-        plan = g.amount / dim
-        show_pace = b_days >= cfg.min_days
-        if not show_pace:
-            rate = plan
+        # Chỉ các khoản chi trong tháng này (không tính khoản tháng trước được gán vào, không tính opening_spent)
+        amounts = [o.amount for o in outflows if o.goal_id == g.id and month_start <= o.day <= today]
+        plan_daily = g.amount / dim
+        counted, _, _ = capped_total(amounts, cfg, floor_cap=round(2 * plan_daily))
+        b_days = max(observed, 1)
+        # Tiên nghiệm trung tính: phần ngân sách còn lại được chi đều tới cuối tháng (tức là "đúng kế hoạch")
+        prior = max(0, g.amount - g.spent) / max(remaining_days, 1)
+        observed_rate = counted / b_days
+        reliable = b_days >= cfg.full_days
+        if b_days < cfg.min_days:
+            rate = prior
+        elif not reliable:
+            w = b_days / cfg.full_days
+            rate = w * observed_rate + (1 - w) * prior
         else:
-            observed_rate = g.spent / b_days
-            if b_days < cfg.full_days:
-                w = b_days / cfg.full_days
-                rate = w * observed_rate + (1 - w) * plan
-            else:
-                rate = observed_rate
+            rate = observed_rate
         projected = g.spent + rate * remaining_days
         pct = round(projected * 100.0 / g.amount, 1)
         if g.spent > g.amount:
             status = "exceeded"
-        elif show_pace and pct > 100 + cfg.budget_tol_pct:
+        elif reliable and pct > 100 + cfg.budget_tol_pct:
             status = "over_pace"
         else:
             status = "on_track"
@@ -120,6 +130,7 @@ def _budget_paces(goals: list[GoalView], *, month_start: date, today: date, obse
                 suggested_daily=max(0, g.amount - g.spent) // max(days_left, 1),
             ),
             rate,
+            reliable,
         ))
     return out
 
@@ -132,6 +143,7 @@ def forecast(
     data_since: date,
     income_day: int = 0,
     baseline_rate: int | None = None,
+    refunds: list[OutflowIn] | None = None,
     cfg: ForecastCfg | None = None,
 ) -> Forecast:
     cfg = cfg or ForecastCfg()
@@ -148,6 +160,9 @@ def forecast(
 
     amounts = [o.amount for o in outflows if o.goal_id is None and win_start <= o.day <= today]
     counted, excess, n_capped = capped_total(amounts, cfg)
+    # Tiền hoàn lại (huỷ đơn, trả cọc) bù vào khoản chi ngoài mục tiêu tương ứng
+    refunded = sum(r.amount for r in (refunds or []) if r.goal_id is None and win_start <= r.day <= today)
+    counted = max(0, counted - refunded)
     rate_obs = counted / window if window > 0 else 0.0
 
     confidence = "normal"
@@ -168,19 +183,24 @@ def forecast(
         rate = rate_obs
 
     remaining = ev.days_left - 1  # số ngày sau hôm nay
-    paces = _budget_paces(ev.goals, month_start=month_start, today=today, observed=observed, data_since=data_since,
+    paces = _budget_paces(ev.goals, outflows, month_start=month_start, today=today, observed=observed,
                           days_left=ev.days_left, dim=dim, remaining_days=remaining, cfg=cfg)
 
     def overrun(d: int) -> float:
+        """Phần vượt ngân sách dự kiến thêm sau d ngày (chỉ ngân sách đã có đủ dữ liệu)."""
         total = 0.0
-        for p, r in paces:
-            total += max(0.0, p.spent + r * d - p.amount) - max(0, p.spent - p.amount)
+        for p, r, reliable in paces:
+            if reliable:
+                total += max(0.0, p.spent + r * d - p.amount) - max(0, p.spent - p.amount)
         return total
 
     pending = ev.expected_pending
+    month_end = date(year, mon, dim)
     salary_day: date | None = None
     if pending > 0 and income_day >= 1:
         salary_day = max(date(year, mon, min(income_day, dim)), today + timedelta(days=1))
+        if salary_day > month_end:
+            salary_day, pending = None, 0  # lương rơi sang tháng sau: không tính cho tháng này
 
     free = ev.free
     hit: date | None = today if free < 0 else None
@@ -197,14 +217,20 @@ def forecast(
             recovers = day
     projected_end = int(value) if remaining > 0 else free
     total_overrun = int(overrun(remaining))
-    safe_daily = max(0, free + pending - total_overrun) // ev.days_left
+    # Mức chi ngoài mục tiêu tối đa mỗi ngày để KHÔNG ngày nào xuống dưới mức sàn (lương chỉ tính từ ngày nhận).
+    limits = []
+    for k in range(1, ev.days_left + 1):  # k = 1: hết hôm nay
+        day = today + timedelta(days=k - 1)
+        available = free + (pending if salary_day and day >= salary_day else 0) - overrun(k - 1)
+        limits.append(available / k)
+    safe_daily = max(0, int(min(limits)))
 
     fc = Forecast(
         status="ok", headline="", confidence=confidence, observed_days=observed, window_days=window,
         daily_spend=round(rate), capped_amount=excess, capped_count=n_capped, projected_free_end=projected_end,
         projected_budget_overrun=total_overrun, income_pending=pending, floor_hit_date=hit,
         days_until_floor_hit=(hit - today).days if hit else None, recovers_on=recovers, min_projected_free=min_free,
-        safe_daily_spend=safe_daily, budgets=[p for p, _ in paces],
+        safe_daily_spend=safe_daily, budgets=[p for p, _, _ in paces],
     )
     fc.headline = _headline(fc, today)
     fc.details = _details(fc, baseline_used=confidence == "low" and baseline_rate is not None)

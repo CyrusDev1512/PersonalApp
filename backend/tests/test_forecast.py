@@ -106,7 +106,8 @@ def test_salary_covers_gap_and_recovers_on():
 
 def test_budget_over_pace_reduces_projection():
     ev = ev_for(10_000_000, food_spent=4_200_000)  # 4,2tr / 14 ngày = 300k/ngày -> dự kiến 9,3tr
-    fc = forecast(ev=ev, outflows=[], today=TODAY, data_since=date(2026, 9, 1))
+    food = [OutflowIn(id=i, amount=300_000, day=date(2026, 10, 14 - i), goal_id=2) for i in range(14)]
+    fc = forecast(ev=ev, outflows=food, today=TODAY, data_since=date(2026, 9, 1))
     food = next(b for b in fc.budgets if b.goal_id == 2)
     assert food.status == "over_pace" and food.projected_pct > 150
     assert fc.projected_budget_overrun > 0

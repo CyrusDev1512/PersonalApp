@@ -127,6 +127,8 @@ def decide_forecast(state: ForecastState | None, fc, ev: Evaluation, now: dateti
     if fc is None or fc.status != "ok" or ev.level not in ("OK", "WARNING") or not ev.goals:
         return False, new
     days = fc.days_until_floor_hit
+    if days == 0 or (ev.free is not None and ev.free < 0):
+        return False, new  # đã dưới mức sàn: việc của cảnh báo mức sàn, không báo trùng (giữ nguyên trạng thái)
     if days is None or days >= FORECAST_REARM_DAYS:
         new.armed = True
         return False, new
