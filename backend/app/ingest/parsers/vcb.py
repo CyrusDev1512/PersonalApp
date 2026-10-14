@@ -45,8 +45,17 @@ _OUT_HINTS = re.compile(
 _MAX_SEGMENT = 800
 
 
+_REF_TOKEN = re.compile(r"\bRef\b", re.I)
+
+
+def _inside_description(folded: str, pos: int) -> bool:
+    """Đầu dòng SMS nằm sau "Ref" trên cùng dòng = nằm trong nội dung chuyển khoản do người gửi tự gõ."""
+    line_start = folded.rfind("\n", 0, pos) + 1
+    return _REF_TOKEN.search(folded, line_start, pos) is not None
+
+
 def _parse_sms_style(doc: Doc, subject_folded: str) -> list[ParsedTx]:
-    heads = list(_SMS_HEAD.finditer(doc.folded))
+    heads = [m for m in _SMS_HEAD.finditer(doc.folded) if not _inside_description(doc.folded, m.start())]
     txs: list[ParsedTx] = []
     for i, m in enumerate(heads):
         amount = amount_from_match(m)

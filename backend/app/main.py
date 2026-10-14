@@ -7,10 +7,10 @@ import contextlib
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 
 from app import __version__, clock
+from app.api.body_limit import BodyLimitMiddleware
 from app.api.ingest_routes import events_router, webhooks
 from app.api.routes import router as api_router
 from app.api.serialize import iso
@@ -110,12 +110,7 @@ def create_app() -> FastAPI:
         docs_url="/docs" if cfg.debug else None, redoc_url=None, openapi_url="/openapi.json" if cfg.debug else None,
     )
 
-    @app.middleware("http")
-    async def limit_body(request: Request, call_next):
-        length = request.headers.get("content-length")
-        if length and length.isdigit() and int(length) > cfg.max_body_bytes:
-            return JSONResponse({"detail": "Payload quá lớn"}, status_code=413)
-        return await call_next(request)
+    app.add_middleware(BodyLimitMiddleware, max_bytes=cfg.max_body_bytes)
 
     @app.get("/health")
     def health() -> dict:

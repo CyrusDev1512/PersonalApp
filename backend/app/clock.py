@@ -99,3 +99,10 @@ def days_in_month(month: str) -> int:
 
 def start_of_day_utc(d: date) -> datetime:
     return datetime.combine(d, time(0, 0), tzinfo=ICT).astimezone(UTC)
+
+
+def iso_z(dt: datetime | None) -> str | None:
+    """ISO-8601 UTC có hậu tố Z (định dạng thời gian của API)."""
+    if dt is None:
+        return None
+    return ensure_utc(dt).strftime("%Y-%m-%dT%H:%M:%SZ")

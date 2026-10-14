@@ -7,14 +7,13 @@ from datetime import datetime
 from sqlmodel import Session, select
 
 from app import clock
+from app.engine.categorize import suggest_rule
 from app.engine.evaluator import Evaluation, GoalView
 from app.models import Account, Alert, Category, CategoryRule, Goal, Transaction, TransactionSource
 
 
 def iso(dt: datetime | None) -> str | None:
-    if dt is None:
-        return None
-    return clock.ensure_utc(dt).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return clock.iso_z(dt)
 
 
 def account_dict(a: Account) -> dict:
@@ -85,7 +84,8 @@ def tx_dict(session: Session, t: Transaction, *, with_duplicates: bool = True) -
         "reference_code": t.reference_code, "counter_account": t.counter_account, "counter_name": t.counter_name,
         "balance_after": t.balance_after, "category_id": t.category_id, "category_name": cat.name if cat else None,
         "category_icon": cat.icon if cat else None, "goal_id": t.goal_id,
-        "goal_name": f"{goal.name} ({goal.month})" if goal else None, "categorized_by": t.categorized_by,
+        "goal_name": f"{goal.name} ({goal.month})" if goal else None, "goal_month": goal.month if goal else None,
+        "categorized_by": t.categorized_by, "suggested_rule": suggest_rule(t.description),
         "status": t.status, "is_manual": t.is_manual, "affects_balance": t.affects_balance, "pair_id": t.pair_id,
         "sources": sources,
         "possible_duplicate_of": possible_duplicate_of(session, t) if with_duplicates else None,

@@ -34,6 +34,7 @@ class GoalIn:
     series_id: str = ""
     repeat_monthly: bool = True
     opening_spent: int = 0
+    rank: int | None = None  # thứ tự ưu tiên tự khớp (id mục tiêu đầu tiên của chuỗi) — ổn định qua các tháng
 
 
 @dataclass
@@ -99,10 +100,10 @@ def _signed_spend(tx: TxIn) -> int:
 
 
 def auto_match_ids(goals: list[GoalIn]) -> set[int]:
-    """Mỗi (danh mục, tháng) chỉ goal tạo sớm nhất được tự khớp theo danh mục."""
+    """Mỗi (danh mục, tháng) chỉ goal của chuỗi tạo sớm nhất được tự khớp theo danh mục."""
     seen: set[tuple[int, str]] = set()
     out: set[int] = set()
-    for g in sorted(goals, key=lambda g: g.id):
+    for g in sorted(goals, key=lambda g: (g.rank if g.rank is not None else g.id, g.id)):
         if g.category_id is None:
             continue
         key = (g.category_id, g.month)

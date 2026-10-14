@@ -31,13 +31,15 @@ def has_webhook_coverage(session: Session, account_id: int, now: datetime | None
 
 
 def recompute_balance(session: Session, account: Account, now: datetime | None = None) -> None:
-    txs = session.exec(
+    rows = session.exec(
         select(Transaction).where(
             Transaction.account_id == account.id,
-            Transaction.status == "active",
+            Transaction.status.in_(["active", "excluded"]),
             Transaction.affects_balance == True,  # noqa: E712
         )
     ).all()
+    # Giao dịch bị loại trừ không cộng/trừ vào số dư, nhưng số dư ngân hàng báo kèm nó vẫn là sự thật -> vẫn làm mốc.
+    txs = [t for t in rows if t.status == "active"]
     covered = has_webhook_coverage(session, account.id, now)
 
     def key(tx: Transaction) -> tuple[datetime, int]:
@@ -46,7 +48,7 @@ def recompute_balance(session: Session, account: Account, now: datetime | None =
     anchor_key: tuple[datetime, int] | None = None
     anchor_balance: int | None = None
     anchor_tx: Transaction | None = None
-    for tx in txs:
+    for tx in rows:
         if tx.balance_after is None:
             continue
         if tx.balance_source == "email" and covered:

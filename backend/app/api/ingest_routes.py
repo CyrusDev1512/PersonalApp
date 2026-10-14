@@ -30,10 +30,14 @@ async def _read_body(request: Request) -> bytes:
     length = request.headers.get("content-length")
     if length and length.isdigit() and int(length) > limit:
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "Payload quá lớn")
-    body = await request.body()
-    if len(body) > limit:
-        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "Payload quá lớn")
-    return body
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "Payload quá lớn")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _count_rejected(source: str) -> None:

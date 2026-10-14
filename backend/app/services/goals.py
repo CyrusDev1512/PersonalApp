@@ -33,13 +33,15 @@ def ensure_month_goals(session: Session, month: str) -> int:
     thì không clone. Dòng đã xoá (archived) của chính `month` vẫn chặn việc clone lại.
     """
     series_ids = session.exec(select(Goal.series_id).where(Goal.month < month).distinct()).all()
-    created = 0
+    sources: list[Goal] = []
     for sid in series_ids:
         if _exists(session, sid, month):
             continue
         src = _latest_before(session, sid, month)
-        if src is None or not src.repeat_monthly:
-            continue
+        if src is not None and src.repeat_monthly:
+            sources.append(src)
+    created = 0
+    for src in sorted(sources, key=lambda g: g.id):  # giữ thứ tự tạo để id tháng mới cũng theo thứ tự cũ
         session.add(_clone(src, month))
         created += 1
     if created:
@@ -73,3 +75,16 @@ def goals_for_month(session: Session, month: str) -> list[Goal]:
     return list(session.exec(
         select(Goal).where(Goal.month == month, Goal.archived == False).order_by(Goal.id)  # noqa: E712
     ).all())
+
+
+def auto_goal_for(session: Session, category_id: int, month: str) -> Goal | None:
+    """Mục tiêu tự khớp của danh mục trong tháng: chuỗi tạo sớm nhất (giống evaluator.auto_match_ids)."""
+    cands = [g for g in goals_for_month(session, month) if g.category_id == category_id]
+    if not cands:
+        return None
+
+    def rank(g: Goal) -> tuple[int, int]:
+        first = session.exec(select(Goal.id).where(Goal.series_id == g.series_id).order_by(Goal.id)).first()
+        return (first or g.id, g.id)
+
+    return min(cands, key=rank)

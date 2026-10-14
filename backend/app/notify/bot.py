@@ -17,7 +17,7 @@ from app.money import format_vnd
 from app.notify.outbox import wake_outbox
 from app.notify.telegram import TelegramClient, TelegramError, render_html
 from app.services import tx_actions
-from app.services.notify import category_buttons, reevaluate_and_notify, tx_info
+from app.services.notify import category_buttons, reevaluate_and_notify, tx_info, tx_markup
 from app.services.summary import build_evaluation, uncategorized_count
 
 log = logging.getLogger(__name__)
@@ -107,14 +107,14 @@ async def handle_message(client: TelegramClient, settings: Settings, msg: dict) 
         await client.send_message(chat_id, text_html, reply_markup=markup, disable_notification=True)
 
 
-def _apply_callback(s: Session, data: str, message_id: int | None) -> str:
-    """Thực hiện hành động của nút bấm. Trả về câu trả lời ngắn."""
+def _apply_callback(s: Session, data: str, message_id: int | None) -> tuple[str, int | None]:
+    """Thực hiện hành động của nút bấm. Trả về (câu trả lời ngắn, id giao dịch bị tác động)."""
     parts = data.split(":")
     kind = parts[0]
     if kind == "a" and len(parts) == 3:
         acc = s.get(Account, int(parts[1]))
         if acc is None:
-            return "Không tìm thấy tài khoản"
+            return "Không tìm thấy tài khoản", None
         include = parts[2] == "1"
         acc.confirmed = True
         acc.include_in_total = include
@@ -123,14 +123,15 @@ def _apply_callback(s: Session, data: str, message_id: int | None) -> str:
         if alert is not None:
             alert.message += "\n→ " + ("Đã tính vào tổng số dư ✅" if include else "Không tính vào tổng 🚫")
             alert.reply_markup_json = None
-            alert.needs_edit = True
+            alert.revision += 1
+            alert.needs_edit = alert.telegram_message_id is not None
             s.add(alert)
         reevaluate_and_notify(s, reason="api_account")
-        return "Đã cập nhật tài khoản"
+        return "Đã cập nhật tài khoản", None
 
     tx = s.get(Transaction, int(parts[1])) if len(parts) >= 2 and parts[1].isdigit() else None
     if tx is None:
-        return "Không tìm thấy giao dịch"
+        return "Không tìm thấy giao dịch", None
     if kind == "c" and len(parts) == 3:
         tx_actions.set_category(s, tx, int(parts[2]))
         reply = "Đã phân loại"
@@ -147,14 +148,42 @@ def _apply_callback(s: Session, data: str, message_id: int | None) -> str:
             rows = category_buttons(s, tx.id)
             rows.append([{"text": "↔️ Chuyển nội bộ", "callback_data": f"t:{tx.id}"}])
             alert.reply_markup_json = json.dumps({"inline_keyboard": rows}, ensure_ascii=False)
+            alert.revision += 1
             alert.needs_edit = alert.telegram_message_id is not None
             s.add(alert)
-        return "Chọn danh mục mới"
+        return "Chọn danh mục mới", tx.id
     else:
-        return "Nút không hợp lệ"
+        return "Nút không hợp lệ", None
     s.flush()
     reevaluate_and_notify(s, reason="recategorize", edit_tx=tx)
-    return reply
+    return reply, tx.id
+
+
+def _pressed_message_update(
+    s: Session, data: str, tx_id: int, message_id: int | None
+) -> tuple[str, dict | None] | None:
+    """Nút được bấm trên tin KHÁC tin biến động gốc (vd. danh sách /uncat): nội dung mới cho chính tin đó."""
+    if message_id is None:
+        return None
+    alert = s.exec(select(Alert).where(Alert.kind == "tx", Alert.transaction_id == tx_id)
+                   .order_by(Alert.id.desc())).first()
+    if alert is not None and alert.telegram_message_id == message_id:
+        return None  # outbox sẽ sửa tin gốc
+    tx = s.get(Transaction, tx_id)
+    if tx is None:
+        return None
+    info = tx_info(s, tx)
+    when = clock.to_ict(tx.bank_time).strftime("%H:%M %d/%m")
+    sign = "−" if tx.direction == "out" else "+"
+    body = f"{info.description or ''}\nDanh mục: {info.category_label or '(chưa phân loại)'}"
+    if info.goal_name:
+        body += f"\nTính cho mục tiêu: {info.goal_name}"
+    text = render_html(f"{sign}{format_vnd(tx.amount)} · {info.account_label} · {when}", body)
+    if data.startswith("r:"):
+        rows = category_buttons(s, tx.id)
+        rows.append([{"text": "↔️ Chuyển nội bộ", "callback_data": f"t:{tx.id}"}])
+        return text, {"inline_keyboard": rows}
+    return text, tx_markup(s, tx)
 
 
 async def handle_callback(client: TelegramClient, settings: Settings, cb: dict) -> None:
@@ -164,11 +193,15 @@ async def handle_callback(client: TelegramClient, settings: Settings, cb: dict) 
     if not _authorized(settings, chat_id, from_id):
         return
     data = str(cb.get("data") or "")
+    message_id = msg.get("message_id")
+    pressed: tuple[str, dict | None] | None = None
     async with write_lock:
         with session_scope() as s:
             try:
-                reply = _apply_callback(s, data, msg.get("message_id"))
+                reply, tx_id = _apply_callback(s, data, message_id)
                 s.commit()
+                if tx_id is not None:
+                    pressed = _pressed_message_update(s, data, tx_id, message_id)
             except tx_actions.ActionError as exc:
                 s.rollback()
                 reply = str(exc)
@@ -176,6 +209,12 @@ async def handle_callback(client: TelegramClient, settings: Settings, cb: dict) 
                 s.rollback()
                 reply = "Nút không hợp lệ"
     wake_outbox()
+    if pressed is not None and chat_id is not None:
+        try:
+            await client.edit_message_text(chat_id, message_id, pressed[0], reply_markup=pressed[1])
+        except TelegramError as exc:
+            if not exc.not_modified:
+                log.info("Không sửa được tin vừa bấm: %s", exc.description)
     try:
         await client.answer_callback_query(cb["id"], reply)
     except TelegramError as exc:

@@ -19,7 +19,8 @@ from app.notify.telegram import TelegramClient, TelegramError, render_html
 log = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 8
-MAX_AGE = timedelta(hours=24)
+MAX_AGE = timedelta(hours=24)  # tin chưa gửi được quá 24 giờ thì bỏ (đã lỗi thời)
+EDIT_MAX_AGE = timedelta(days=30)  # bot sửa được tin của chính nó lâu hơn nhiều
 IDLE_WAIT_SECONDS = 15.0
 
 _wake = asyncio.Event()
@@ -38,6 +39,7 @@ class _Job:
     markup: dict | None
     loud: bool
     attempts: int
+    revision: int
 
 
 def _backoff(attempts: int) -> timedelta:
@@ -51,8 +53,8 @@ def _due_jobs(limit: int = 20) -> list[_Job]:
             select(Alert).where(
                 Alert.deliver_telegram == True,  # noqa: E712
                 Alert.cancelled == False,  # noqa: E712
-                (Alert.telegram_sent == False) | (Alert.needs_edit == True),  # noqa: E712
-                Alert.created_at >= now - MAX_AGE,
+                ((Alert.telegram_sent == False) & (Alert.created_at >= now - MAX_AGE))  # noqa: E712
+                | ((Alert.needs_edit == True) & (Alert.created_at >= now - EDIT_MAX_AGE)),  # noqa: E712
                 Alert.telegram_attempts < MAX_ATTEMPTS,
             ).order_by(Alert.id).limit(limit * 3)
         ).all()
@@ -67,7 +69,7 @@ def _due_jobs(limit: int = 20) -> list[_Job]:
                 continue
             markup = json.loads(a.reply_markup_json) if a.reply_markup_json else None
             jobs.append(_Job(a.id, edit, a.telegram_message_id, render_html(a.title, a.message), markup, a.loud,
-                             a.telegram_attempts))
+                             a.telegram_attempts, a.revision))
             if len(jobs) >= limit:
                 break
         return jobs
@@ -107,8 +109,9 @@ async def drain_once(client: TelegramClient, chat_id: int) -> int:
                 if err is None:
                     ok += 1
                     a.telegram_sent = True
-                    a.needs_edit = False
                     a.telegram_message_id = mid
+                    # Nội dung đã đổi trong lúc đang gửi -> còn phải sửa lại tin cho đúng bản mới nhất
+                    a.needs_edit = a.revision != job.revision
                     a.telegram_last_error = None
                     a.telegram_next_attempt_at = None
                 else:

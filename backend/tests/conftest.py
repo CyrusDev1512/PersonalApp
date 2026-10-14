@@ -89,3 +89,32 @@ from contextlib import asynccontextmanager  # noqa: E402
 @asynccontextmanager
 async def _noop_lifespan(app):
     yield
+
+
+VCB_NO = "0123456789"
+
+
+@pytest.fixture
+def setup(session, fake_now):
+    """TK VCB (số dư 10tr đầu ngày), mục tiêu tháng 10: trọ 3tr, ăn 5tr, đã chi ăn 2tr."""
+    from datetime import timedelta
+
+    from app.models import Account, Goal, Transaction
+    from app.seed import category_by_key
+    from app.services.balance import recompute_balance
+
+    food = category_by_key(session, "food")
+    rent = category_by_key(session, "rent")
+    start_of_day = clock.start_of_day_utc(clock.today_ict())
+    vcb = Account(bank="VCB", account_number=VCB_NO, last4=VCB_NO[-4:], name="VCB chính",
+                  manual_balance=10_000_000, manual_balance_at=start_of_day)
+    session.add(vcb)
+    session.add(Goal(name="Tiền trọ", type="reserve", amount=3_000_000, category_id=rent.id, month="2026-10"))
+    session.add(Goal(name="Tiền ăn", type="budget", amount=5_000_000, category_id=food.id, month="2026-10"))
+    session.flush()
+    session.add(Transaction(account_id=vcb.id, direction="out", amount=2_000_000, category_id=food.id,
+                            categorized_by="user", bank_time=start_of_day - timedelta(days=3), evaluated=True))
+    session.commit()
+    recompute_balance(session, vcb)
+    session.commit()
+    return {"vcb": vcb, "food": food, "rent": rent}

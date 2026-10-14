@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlmodel import Session, select
 
@@ -24,6 +24,8 @@ from app.engine.messages import (
 from app.models import Account, Alert, AlertState, Category, Goal, Transaction
 from app.services import runtime_settings
 from app.services.summary import build_evaluation
+
+OUTBOX_SEND_WINDOW = timedelta(hours=24)  # khớp outbox.MAX_AGE
 
 # Danh mục hiện thành nút bấm trong Telegram (theo system_key)
 BUTTON_CATEGORIES = ("food", "rent", "transport", "shopping", "bills", "savings", "other")
@@ -207,15 +209,20 @@ def reevaluate_and_notify(
         existing = session.exec(
             select(Alert).where(Alert.kind == "tx", Alert.transaction_id == edit_tx.id).order_by(Alert.id.desc())
         ).first()
+        reachable = False
         if existing is not None:
             existing.title, existing.message = title, message
             existing.reply_markup_json = json.dumps(markup, ensure_ascii=False) if markup else None
             existing.snapshot_json = snap
+            existing.revision += 1
             if existing.telegram_message_id is not None:
                 existing.needs_edit = True
+                reachable = True
+            elif not existing.telegram_sent and existing.created_at >= now - OUTBOX_SEND_WINDOW:
+                reachable = True  # tin chưa gửi: sẽ được gửi với nội dung mới này
             session.add(existing)
-        # Cảnh báo phát sinh do phân loại lại: lưu vào lịch sử trong app (tin Telegram đã được sửa tại chỗ).
-        _separate_alerts(session, ev, dec, budget_fired, reason, snap, deliver=existing is None)
+        # Có tin để sửa tại chỗ thì cảnh báo mới chỉ lưu trong app; không có thì gửi thành tin riêng.
+        _separate_alerts(session, ev, dec, budget_fired, reason, snap, deliver=not reachable)
         return ev
 
     _separate_alerts(session, ev, dec, budget_fired, reason, snap, deliver=True)

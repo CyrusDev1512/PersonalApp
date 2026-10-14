@@ -10,7 +10,7 @@ from app import clock
 from app.ingest.pairing import PAIR_WINDOW, mark_pair
 from app.models import Account, Category, CategoryRule, Goal, Transaction
 from app.services.balance import recompute_balance
-from app.services.goals import ensure_goal, goals_for_month
+from app.services.goals import auto_goal_for, ensure_goal
 from app.text import normalize_pattern
 
 
@@ -41,21 +41,31 @@ def set_category(
     cat = session.get(Category, category_id)
     if cat is None:
         raise ActionError("Danh mục không tồn tại")
+    if remember_pattern:
+        _remember_rule(session, cat, tx.direction, remember_pattern)
     if cat.kind == "transfer":
         mark_internal(session, tx)
         return
     _unpair(session, tx)
     tx.category_id, tx.categorized_by, tx.hold_until = cat.id, "user", None
+    if tx.goal_id is not None:
+        goal = session.get(Goal, tx.goal_id)
+        # Đã gán mục tiêu của danh mục khác (vd. "Tính cho tháng sau" tiền trọ) -> bỏ gán, tính theo danh mục mới
+        if goal is None or (goal.category_id is not None and goal.category_id != cat.id):
+            tx.goal_id = None
     session.add(tx)
+
+
+def _remember_rule(session: Session, cat: Category, direction: str, remember_pattern: str) -> None:
     if remember_pattern:
         pattern = normalize_pattern(remember_pattern)
         if len(pattern) < 2:
             raise ActionError("Cụm từ để nhớ luật quá ngắn")
         exists = session.exec(
-            select(CategoryRule).where(CategoryRule.pattern == pattern, CategoryRule.direction == tx.direction)
+            select(CategoryRule).where(CategoryRule.pattern == pattern, CategoryRule.direction == direction)
         ).first()
         if exists is None:
-            session.add(CategoryRule(category_id=cat.id, pattern=pattern, direction=tx.direction, priority=10,
+            session.add(CategoryRule(category_id=cat.id, pattern=pattern, direction=direction, priority=10,
                                      origin="user"))
         else:
             exists.category_id, exists.origin, exists.priority = cat.id, "user", 10
@@ -108,17 +118,15 @@ def goal_for_tx(session: Session, tx: Transaction) -> Goal | None:
         return session.get(Goal, tx.goal_id)
     if tx.category_id is None:
         return None
-    month = clock.month_of(tx.bank_time)
-    for g in goals_for_month(session, month):  # theo id tăng dần -> goal tự khớp đứng trước
-        if g.category_id == tx.category_id:
-            return g
-    return None
+    return auto_goal_for(session, tx.category_id, clock.month_of(tx.bank_time))
 
 
 def assign_next_month(session: Session, tx: Transaction) -> Goal:
     goal = goal_for_tx(session, tx)
     if goal is None:
         raise ActionError("Giao dịch chưa thuộc mục tiêu nào — hãy chọn danh mục trước")
+    if goal.month > clock.month_of(tx.bank_time):
+        return goal  # đã tính cho tháng sau rồi: bấm lại không đẩy sang tháng kế tiếp
     target = ensure_goal(session, goal.series_id, clock.next_month(goal.month))
     if target is None:
         raise ActionError("Không tạo được mục tiêu tháng sau")

@@ -55,6 +55,15 @@ def _inflow_mentions_owner(tx: Transaction) -> bool:
     )
 
 
+def looks_internal_in(session: Session, tx: Transaction) -> bool:
+    """Khoản vào có dấu hiệu đến từ TK khác của mình (tên chủ TK, số TK của mình, gợi ý cấu hình)."""
+    accounts = list(session.exec(select(Account).where(Account.bank != "CASH")).all())
+    numbers = _own_numbers(accounts, tx.account_id)
+    if tx.counter_account and digits_only(tx.counter_account) in numbers:
+        return True
+    return _inflow_mentions_owner(tx) or _mentions_number(tx.description, numbers)
+
+
 def try_pair(session: Session, tx: Transaction, now: datetime) -> Transaction | None:
     """Ghép `tx` với nửa còn lại (cùng số tiền, khác TK của mình, chiều ngược lại, trong 30 phút)."""
     if tx.pair_id is not None or tx.status == "excluded" or tx.is_manual:
@@ -72,7 +81,7 @@ def try_pair(session: Session, tx: Transaction, now: datetime) -> Transaction | 
             Transaction.amount == tx.amount,
             Transaction.account_id != tx.account_id,
             Transaction.pair_id == None,  # noqa: E711
-            Transaction.status != "excluded",
+            Transaction.status == "active",  # email đang chờ webhook (pending) chưa được tính -> chưa ghép
             Transaction.is_manual == False,  # noqa: E712
             Transaction.bank_time >= tx.bank_time - PAIR_WINDOW,
             Transaction.bank_time <= tx.bank_time + PAIR_WINDOW,
@@ -88,6 +97,7 @@ def try_pair(session: Session, tx: Transaction, now: datetime) -> Transaction | 
         out_tx, in_tx = (tx, c) if tx.direction == "out" else (c, tx)
         evidence = (
             out_tx.hold_until is not None
+            or in_tx.hold_until is not None
             or looks_internal_out(session, out_tx)
             or _inflow_mentions_owner(in_tx)
             or _mentions_number(in_tx.description, _own_numbers(list(accounts.values()), in_tx.account_id))

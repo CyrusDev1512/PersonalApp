@@ -11,6 +11,7 @@ from __future__ import annotations
 import imaplib
 import logging
 import re
+import ssl
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -23,7 +24,9 @@ from app.ingest.parsers.base import normalize_domain
 logger = logging.getLogger(__name__)
 
 IMAP_TIMEOUT_SECONDS = 30
-DEFAULT_MAX_MESSAGES = 200
+DEFAULT_MAX_MESSAGES = 50
+# Email biến động số dư chỉ vài chục KB; thư lớn hơn (đính kèm, quảng cáo) bị bỏ qua để tránh hết RAM.
+MAX_MESSAGE_BYTES = 1_000_000
 # Tên tháng tiếng Anh cố định theo RFC 3501 (không phụ thuộc locale).
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 _DOMAIN_OK = re.compile(r"[a-z0-9](?:[a-z0-9.\-]*[a-z0-9])?")
@@ -60,7 +63,10 @@ def _safe_logout(conn: Any) -> None:
 
 def make_imap_connection(settings: Settings) -> imaplib.IMAP4_SSL:
     """Mở kết nối IMAP over SSL và đăng nhập. Đăng nhập lỗi → đóng kết nối rồi raise lại."""
-    conn = imaplib.IMAP4_SSL(settings.imap_host, settings.imap_port, timeout=IMAP_TIMEOUT_SECONDS)
+    # Bắt buộc kiểm tra chứng chỉ + hostname (mặc định của imaplib KHÔNG kiểm tra).
+    context = ssl.create_default_context()
+    conn = imaplib.IMAP4_SSL(settings.imap_host, settings.imap_port, ssl_context=context,
+                             timeout=IMAP_TIMEOUT_SECONDS)
     try:
         conn.login(settings.imap_user, settings.imap_password)
     except BaseException:
@@ -168,6 +174,21 @@ def _max_uid(conn: Any) -> int:
     return max(uids) if uids else 0
 
 
+def _fetch_size(conn: Any, uid: int) -> int | None:
+    """Kích thước thư (RFC822.SIZE) — None nếu máy chủ không trả."""
+    try:
+        typ, data = conn.uid("FETCH", str(uid), "(RFC822.SIZE)")
+    except imaplib.IMAP4.error:
+        return None
+    if _to_str(typ).upper() != "OK":
+        return None
+    for text in _flatten(data):
+        m = re.search(r"RFC822\.SIZE (\d+)", text.upper())
+        if m:
+            return int(m.group(1))
+    return None
+
+
 def _fetch_raw(conn: Any, uid: int) -> bytes | None:
     typ, data = conn.uid("FETCH", str(uid), "(BODY.PEEK[])")
     if _to_str(typ).upper() != "OK":
@@ -244,8 +265,12 @@ def fetch_new_messages(
     batch = uids[:limit]
     messages: list[FetchedMessage] = []
     for uid in batch:
+        size = _fetch_size(conn, uid)
+        if size is not None and size > MAX_MESSAGE_BYTES:
+            logger.warning("Bỏ qua thư UID %s: %s byte vượt giới hạn %s", uid, size, MAX_MESSAGE_BYTES)
+            continue
         raw = _fetch_raw(conn, uid)
-        if raw is not None:
+        if raw is not None and len(raw) <= MAX_MESSAGE_BYTES:
             messages.append(FetchedMessage(uid=uid, raw=raw))
 
     # Bị giới hạn: dừng ở thư cuối đã lấy. Đã xét hết: tiến tới UID lớn nhất lúc SELECT để lần sau không tìm lại.

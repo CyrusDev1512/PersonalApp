@@ -9,7 +9,7 @@ from sqlmodel import Session, func, select
 
 from app import clock
 from app.engine.evaluator import Evaluation, GoalIn, TxIn, evaluate
-from app.models import Account, Category, Transaction
+from app.models import Account, Category, Goal, Transaction
 from app.services import runtime_settings
 from app.services.goals import ensure_month_goals, goals_for_month
 
@@ -30,12 +30,17 @@ def build_evaluation(session: Session, month: str | None = None, now: datetime |
 
     cats = {c.id: c for c in session.exec(select(Category)).all()}
     goals = goals_for_month(session, month)
+    series_rank = dict(session.exec(
+        select(Goal.series_id, func.min(Goal.id)).where(Goal.series_id.in_([g.series_id for g in goals]))
+        .group_by(Goal.series_id)
+    ).all()) if goals else {}
     goal_ins = [
         GoalIn(
             id=g.id, name=g.name, type=g.type, amount=g.amount, month=g.month, category_id=g.category_id,
             category_name=cats[g.category_id].name if g.category_id in cats else None,
             category_icon=cats[g.category_id].icon if g.category_id in cats else None,
             series_id=g.series_id, repeat_monthly=g.repeat_monthly, opening_spent=g.opening_spent,
+            rank=series_rank.get(g.series_id),
         )
         for g in goals
     ]
@@ -56,9 +61,10 @@ def build_evaluation(session: Session, month: str | None = None, now: datetime |
     if accounts and all(a.balance is not None for a in accounts):
         balance = sum(a.balance for a in accounts)  # type: ignore[misc]
     included_ids = {a.id for a in accounts}
+    # Khoản đang chờ ghép chuyển nội bộ: tiền ra được cộng lại, tiền vào bị trừ ra cho tới khi ghép xong.
     in_transit = sum(
-        t.amount for t in txs
-        if t.account_id in included_ids and t.direction == "out" and t.pair_id is None
+        (t.amount if t.direction == "out" else -t.amount) for t in txs
+        if t.account_id in included_ids and t.pair_id is None
         and t.hold_until is not None and t.hold_until > now
     )
     income_ids = {c.id for c in cats.values() if c.system_key == "income"}

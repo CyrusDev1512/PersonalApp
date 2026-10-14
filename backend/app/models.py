@@ -133,6 +133,7 @@ class Transaction(SQLModel, table=True):
     # Khoản chi có thể là chuyển nội bộ: hoãn đánh giá/thông báo tới thời điểm này để chờ ghép cặp
     hold_until: datetime | None = Field(default=None, sa_type=UTCDateTime)
     evaluated: bool = False  # đã chạy đánh giá + thông báo cho giao dịch này chưa
+    quiet: bool = False  # nhập im lặng (backfill): không bao giờ gửi tin riêng cho giao dịch này
     created_at: datetime = Field(default_factory=_now, sa_type=UTCDateTime)
     updated_at: datetime = Field(default_factory=_now, sa_type=UTCDateTime)
 
@@ -190,6 +191,7 @@ class Alert(SQLModel, table=True):
     telegram_next_attempt_at: datetime | None = Field(default=None, sa_type=UTCDateTime)
     telegram_last_error: str | None = None
     needs_edit: bool = Field(default=False, index=True)
+    revision: int = 0  # tăng mỗi lần nội dung đổi; outbox dùng để không ghi đè bản sửa mới hơn
     cancelled: bool = False
 
 

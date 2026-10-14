@@ -28,6 +28,8 @@ from app.models import Account, Alert, Category, CategoryRule, Goal, IngestEvent
 from app.notify.outbox import wake_outbox
 from app.services import runtime_settings, tx_actions
 from app.services.balance import recompute_balance
+from app.services.goals import auto_goal_for, ensure_goal
+from app.services.health import health_lines
 from app.services.notify import reevaluate_and_notify
 from app.services.summary import build_evaluation, uncategorized_count
 from app.text import digits_only, normalize_pattern
@@ -75,8 +77,10 @@ def ingest_health(s: Session) -> dict:
         "email": {"enabled": cfg.email_enabled, "last_success_at": email.get("last_success_at"),
                   "last_error": email.get("last_error")},
     }
+    warnings = health_lines(s, cfg)
     return {
-        "stale": bool(email.get("failing_since")),
+        "stale": bool(warnings),
+        "warnings": warnings,
         "error_events": counts.get("error", 0),
         "unparsed_events": counts.get("unparsed", 0),
         "sources": sources,
@@ -157,9 +161,18 @@ async def create_goal(body: GoalCreate) -> dict:
     async with write_lock:
         with session_scope() as s:
             _validate_goal_category(s, body.type, body.category_id)
-            goal = Goal(name=body.name.strip(), type=body.type, amount=body.amount, category_id=body.category_id,
-                        month=body.month or clock.current_month(), repeat_monthly=body.repeat_monthly,
-                        opening_spent=body.opening_spent)
+            month = body.month or clock.current_month()
+            goal = None
+            if body.category_id is not None and month > clock.current_month():
+                # Tháng sau đã có chuỗi lặp cùng danh mục + loại -> sửa bản của tháng đó thay vì tạo trùng
+                prev = auto_goal_for(s, body.category_id, clock.prev_month(month))
+                if prev is not None and prev.repeat_monthly and prev.type == body.type:
+                    goal = ensure_goal(s, prev.series_id, month)
+            if goal is None:
+                goal = Goal(category_id=body.category_id, month=month, type=body.type, name="", amount=body.amount)
+            goal.name, goal.amount, goal.type = body.name.strip(), body.amount, body.type
+            goal.repeat_monthly, goal.opening_spent = body.repeat_monthly, body.opening_spent
+            goal.updated_at = clock.now()
             s.add(goal)
             s.flush()
             reevaluate_and_notify(s, reason="api_goal")
@@ -191,6 +204,13 @@ async def update_goal(goal_id: int, body: GoalUpdate) -> dict:
                 goal.opening_spent = body.opening_spent
             goal.updated_at = clock.now()
             s.add(goal)
+            # Áp dụng cho các tháng sau đã được tạo trước (vd. do "Tính cho tháng sau")
+            for later in s.exec(select(Goal).where(Goal.series_id == goal.series_id, Goal.month > goal.month,
+                                                   Goal.archived == False)).all():  # noqa: E712
+                later.name, later.amount, later.type = goal.name, goal.amount, goal.type
+                later.category_id, later.repeat_monthly = goal.category_id, goal.repeat_monthly
+                later.updated_at = goal.updated_at
+                s.add(later)
             s.flush()
             reevaluate_and_notify(s, reason="api_goal")
             s.commit()
@@ -293,9 +313,11 @@ def list_transactions(
     with session_scope() as s:
         cond = [Transaction.bank_time >= start, Transaction.bank_time < end]
         if uncategorized:
+            included = [a.id for a in s.exec(select(Account).where(
+                Account.include_in_total == True, Account.confirmed == True)).all()]  # noqa: E712
             cond += [Transaction.direction == "out", Transaction.category_id == None,  # noqa: E711
                      Transaction.goal_id == None, Transaction.pair_id == None,  # noqa: E711
-                     Transaction.status == "active"]
+                     Transaction.status == "active", Transaction.account_id.in_(included)]
         total = s.exec(select(func.count(Transaction.id)).where(*cond)).one()
         rows = s.exec(
             select(Transaction).where(*cond).order_by(Transaction.bank_time.desc(), Transaction.id.desc())
@@ -448,6 +470,8 @@ async def update_account(account_id: int, body: AccountUpdate) -> dict:
                 acc.account_number, acc.last4 = number, (number[-4:] if number else acc.last4)
             if "include_in_total" in fields and body.include_in_total is not None:
                 acc.include_in_total = body.include_in_total
+                if body.include_in_total:
+                    acc.confirmed = True  # bật "tính vào tổng" nghĩa là đã xác nhận đây là TK của mình
             if "confirmed" in fields and body.confirmed is not None:
                 acc.confirmed = body.confirmed
             if "balance" in fields and body.balance is not None:

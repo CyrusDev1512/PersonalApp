@@ -10,23 +10,23 @@ from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
-from sqlmodel import Session, func, select
+from sqlmodel import Session
 
 from app import clock
 from app.config import Settings, get_settings
 from app.db import kv_get, kv_set, session_scope, write_lock
 from app.engine.messages import compose_digest
 from app.ingest.service import mark_event, process_event, store_event, tick
-from app.models import Alert, IngestEvent
+from app.models import Alert
 from app.notify.outbox import wake_outbox
 from app.services.goals import ensure_month_goals
+from app.services.health import health_lines, parse_iso
 from app.services.notify import add_info_alert, reevaluate_and_notify
 from app.services.summary import build_evaluation, uncategorized_count
 
 log = logging.getLogger(__name__)
 
 EMAIL_FAILING_ALERT_AFTER = timedelta(minutes=30)
-WEBHOOK_SILENCE_WARN = timedelta(hours=48)
 
 _poll_lock = asyncio.Lock()
 
@@ -49,34 +49,6 @@ async def run_rollover() -> None:
     wake_outbox()
 
 
-def health_lines(s: Session, cfg: Settings) -> list[str]:
-    now = clock.now()
-    lines: list[str] = []
-    email = kv_get(s, "health:email", {}) or {}
-    if cfg.email_enabled and email.get("failing_since"):
-        lines.append(f"📭 Đọc email ngân hàng đang lỗi: {email.get('last_error') or '?'}")
-    for source, enabled in (("sepay", cfg.sepay_enabled), ("casso", cfg.casso_enabled)):
-        if not enabled:
-            continue
-        last = (kv_get(s, f"health:{source}", {}) or {}).get("last_event_at")
-        if last is None or clock.ensure_utc(_parse_iso(last)) < now - WEBHOOK_SILENCE_WARN:
-            lines.append(f"🔌 Chưa nhận webhook {source.upper()} trong 48 giờ qua — kiểm tra kết nối.")
-    bad = s.exec(
-        select(func.count(IngestEvent.id)).where(
-            IngestEvent.received_at >= now - timedelta(hours=24), IngestEvent.status.in_(["error", "unparsed"])
-        )
-    ).one()
-    if bad:
-        lines.append(f"⚙️ {bad} biến động trong 24 giờ qua không đọc được — xem trong app.")
-    return lines
-
-
-def _parse_iso(value: str):
-    from datetime import datetime
-
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
 async def run_digest() -> None:
     cfg = get_settings()
     async with write_lock:
@@ -95,7 +67,7 @@ async def run_digest() -> None:
 
 def _record_email_success(s: Session) -> None:
     h = kv_get(s, "health:email", {}) or {}
-    h.update({"last_success_at": clock.now().isoformat(), "last_error": None, "failing_since": None,
+    h.update({"last_success_at": clock.iso_z(clock.now()), "last_error": None, "failing_since": None,
               "alerted": False})
     kv_set(s, "health:email", h)
 
@@ -104,11 +76,11 @@ def _record_email_failure(s: Session, error: str) -> None:
     now = clock.now()
     h = kv_get(s, "health:email", {}) or {}
     h["last_error"] = error[:300]
-    h["last_error_at"] = now.isoformat()
+    h["last_error_at"] = clock.iso_z(now)
     h.setdefault("failing_since", None)
     if not h.get("failing_since"):
-        h["failing_since"] = now.isoformat()
-    failing_since = clock.ensure_utc(_parse_iso(h["failing_since"]))
+        h["failing_since"] = clock.iso_z(now)
+    failing_since = parse_iso(h["failing_since"])
     if now - failing_since >= EMAIL_FAILING_ALERT_AFTER and not h.get("alerted"):
         add_info_alert(s, "📭 Không đọc được email ngân hàng",
                        f"Đã lỗi hơn 30 phút: {error[:200]}. Kiểm tra IMAP_USER / app password.", kind="health",

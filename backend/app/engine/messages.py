@@ -37,7 +37,7 @@ def status_lines(ev: Evaluation) -> list[str]:
         return ["❔ Chưa biết số dư — mở app và nhập số dư hiện tại."]
     lines = [f"Số dư: {format_vnd(ev.balance)}"]
     if ev.in_transit:
-        lines.append(f"Đang chuyển nội bộ: {format_vnd(ev.in_transit)}")
+        lines.append(f"Đang chờ ghép chuyển nội bộ: {format_vnd(abs(ev.in_transit))}")
     if ev.goals:
         lines.append(f"Mức sàn: {format_vnd(ev.floor)} · Được tiêu: {format_vnd(ev.free)}")
     return lines

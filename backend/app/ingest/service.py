@@ -18,7 +18,7 @@ from sqlmodel import Session, select
 from app import clock
 from app.engine.categorize import RuleIn, categorize
 from app.ingest.accounts import resolve_account
-from app.ingest.pairing import hold_deadline, looks_internal_out, try_pair
+from app.ingest.pairing import hold_deadline, looks_internal_in, looks_internal_out, try_pair
 from app.ingest.schema import IgnoredPayload, NormalizedTx, ParseError
 from app.models import Account, Alert, Category, CategoryRule, IngestEvent, Transaction, TransactionSource
 from app.seed import category_by_key
@@ -153,7 +153,6 @@ def find_match(session: Session, acc: Account, ntx: NormalizedTx) -> Transaction
             Transaction.account_id == acc.id,
             Transaction.direction == ntx.direction,
             Transaction.amount == ntx.amount,
-            Transaction.status != "excluded",
             Transaction.is_manual == False,  # noqa: E712
             Transaction.bank_time >= ntx.bank_time - timedelta(days=1),
             Transaction.bank_time <= ntx.bank_time + timedelta(days=1),
@@ -239,18 +238,26 @@ def ingest_tx(
 
     match = find_match(session, acc, ntx)
     if match is not None:
-        was_pending = match.status == "pending"
-        _merge(session, match, ntx)
         session.add(TransactionSource(transaction_id=match.id, source=ntx.source, external_id=ntx.external_id,
                                       ingest_event_id=event_id))
+        if match.status == "excluded":
+            # Người dùng đã loại trừ giao dịch này: bản sao từ nguồn khác cũng bị loại theo.
+            session.commit()
+            return IngestOutcome("merged", match.id, created)
+        was_pending = match.status == "pending"
+        _merge(session, match, ntx)
         if was_pending and ntx.source != "email":
             match.status, match.pending_until = "active", None
+            match.quiet = match.quiet and not notify
         session.flush()
-        recompute_balance(session, acc, now)
-        if not match.evaluated and match.status == "active":
-            _evaluate_new(session, match, None, notify=notify, now=now)
-        elif notify:
-            reevaluate_and_notify(session, reason="merge", now=now)
+        if was_pending and match.status == "active":
+            _activate(session, match, acc, notify=notify and not match.quiet, now=now)
+        else:
+            recompute_balance(session, acc, now)
+            if not match.evaluated and match.status == "active":
+                _evaluate_new(session, match, None, notify=notify and not match.quiet, now=now)
+            elif notify:
+                reevaluate_and_notify(session, reason="merge", now=now)
         session.commit()
         return IngestOutcome("merged", match.id, created)
 
@@ -258,31 +265,48 @@ def ingest_tx(
         account_id=acc.id, direction=ntx.direction, amount=ntx.amount, bank_time=ntx.bank_time,
         time_precision=ntx.time_precision, description=ntx.description or "", reference_code=ntx.reference_code,
         counter_account=ntx.counter_account, counter_name=ntx.counter_name, balance_after=ntx.balance_after,
-        balance_source=ntx.source if ntx.balance_after is not None else None,
+        balance_source=ntx.source if ntx.balance_after is not None else None, quiet=not notify,
     )
-    if ntx.source == "email" and has_webhook_coverage(session, acc.id, now):
+    # Email của TK có webhook: chờ webhook khớp (trừ email đã quá cũ, webhook sẽ không bao giờ tới nữa).
+    if (ntx.source == "email" and now - ntx.bank_time <= EMAIL_PENDING_FOR
+            and has_webhook_coverage(session, acc.id, now)):
         tx.status, tx.pending_until = "pending", now + EMAIL_PENDING_FOR
     apply_category_rules(session, tx)
     session.add(tx)
     session.flush()
     session.add(TransactionSource(transaction_id=tx.id, source=ntx.source, external_id=ntx.external_id,
                                   ingest_event_id=event_id))
-
-    paired: Transaction | None = None
     if tx.status == "active":
-        paired = try_pair(session, tx, now)
-        if paired is None and tx.direction == "out" and acc.include_in_total and looks_internal_out(session, tx):
+        _activate(session, tx, acc, notify=notify, now=now)
+    else:
+        recompute_balance(session, acc, now)
+    session.commit()
+    return IngestOutcome("created", tx.id, created)
+
+
+def _activate(session: Session, tx: Transaction, acc: Account, *, notify: bool, now: datetime) -> None:
+    """Giao dịch vừa được tính (mới, hoặc email chờ được xác nhận): ghép cặp / hoãn chờ ghép, số dư, thông báo."""
+    paired = try_pair(session, tx, now)
+    fresh = now - tx.bank_time <= NOTIFY_MAX_AGE
+    if paired is None and notify and fresh and acc.include_in_total and acc.confirmed:
+        internal = (looks_internal_out(session, tx) if tx.direction == "out"
+                    else looks_internal_in(session, tx))
+        if internal:
             tx.hold_until = hold_deadline(now)
             tx.category_id, tx.categorized_by = None, "none"
     session.flush()
     recompute_balance(session, acc, now)
     if paired is not None:
         other = session.get(Account, paired.account_id)
-        if other is not None:
+        if other is not None and other.id != acc.id:
             recompute_balance(session, other, now)
     _evaluate_new(session, tx, paired, notify=notify, now=now)
-    session.commit()
-    return IngestOutcome("created", tx.id, created)
+
+
+def _tx_alert(session: Session, tx_id: int) -> Alert | None:
+    return session.exec(
+        select(Alert).where(Alert.kind == "tx", Alert.transaction_id == tx_id).order_by(Alert.id.desc())
+    ).first()
 
 
 def _evaluate_new(
@@ -304,18 +328,24 @@ def _evaluate_new(
     if paired is not None:
         out_half = tx if tx.direction == "out" else paired
         in_half = paired if out_half is tx else tx
-        prior = session.exec(select(Alert).where(Alert.kind == "tx", Alert.transaction_id == out_half.id)).first()
-        if out_half.evaluated and prior is not None:
-            reevaluate_and_notify(session, reason="pair", edit_tx=out_half, now=now)
-        else:
-            reevaluate_and_notify(session, reason="pair", tx=out_half, now=now)
+        # Nửa nào đã có tin Telegram thì sửa tin đó thành "chuyển nội bộ"; chưa có tin nào thì gửi 1 tin.
+        edited = False
+        for half in (out_half, in_half):
+            if half.evaluated and _tx_alert(session, half.id) is not None:
+                reevaluate_and_notify(session, reason="pair", edit_tx=half, now=now)
+                edited = True
+        if not edited:
+            if out_half.quiet and in_half.quiet:
+                reevaluate_and_notify(session, reason="pair", now=now)
+            else:
+                reevaluate_and_notify(session, reason="pair", tx=out_half, now=now)
         for t in (out_half, in_half):
             t.evaluated = True
             session.add(t)
         return
     if tx.hold_until is not None and tx.hold_until > now:
         return  # chờ ghép chuyển nội bộ; job `tick` sẽ xử lý khi hết hạn
-    if now - tx.bank_time > NOTIFY_MAX_AGE:
+    if tx.quiet or now - tx.bank_time > NOTIFY_MAX_AGE:
         tx.evaluated = True
         session.add(tx)
         reevaluate_and_notify(session, reason="backfill", now=now)
@@ -327,7 +357,7 @@ def _evaluate_new(
 
 
 def tick(session: Session, now: datetime | None = None) -> bool:
-    """Xử lý khoản chi hết hạn chờ ghép cặp và email đã chờ webhook quá lâu. Trả về True nếu có thay đổi."""
+    """Xử lý khoản chờ ghép cặp đã hết hạn và email đã chờ webhook quá lâu. Trả về True nếu có thay đổi."""
     now = now or clock.now()
     changed = False
     held = session.exec(
@@ -344,6 +374,7 @@ def tick(session: Session, now: datetime | None = None) -> bool:
             apply_category_rules(session, tx)
         session.flush()
         if tx.status == "active":
+            # Hết thời gian chờ mà không ghép được: thông báo như giao dịch thường (được hoãn nên không áp hạn tuổi)
             reevaluate_and_notify(session, reason="tx", tx=tx, now=now)
         changed = True
     pending = session.exec(
@@ -354,22 +385,31 @@ def tick(session: Session, now: datetime | None = None) -> bool:
         session.add(tx)
         session.flush()
         acc = session.get(Account, tx.account_id)
-        if acc is not None:
-            recompute_balance(session, acc, now)
-        paired = try_pair(session, tx, now)
-        _evaluate_new_promoted(session, tx, paired, now)
+        if acc is None:
+            continue
+        if tx.quiet or tx.evaluated:
+            _activate(session, tx, acc, notify=False, now=now)
+            reevaluate_and_notify(session, reason="backfill", now=now)
+        else:
+            _activate_promoted(session, tx, acc, now)
         changed = True
     if changed:
         session.commit()
     return changed
 
 
-def _evaluate_new_promoted(session: Session, tx: Transaction, paired: Transaction | None, now: datetime) -> None:
-    acc = session.get(Account, tx.account_id)
-    if paired is not None or acc is None or not acc.include_in_total or not acc.confirmed:
+def _activate_promoted(session: Session, tx: Transaction, acc: Account, now: datetime) -> None:
+    """Email đã chờ webhook 6 giờ: vẫn gửi tin để người dùng phân loại, dù giao dịch đã cũ."""
+    paired = try_pair(session, tx, now)
+    session.flush()
+    recompute_balance(session, acc, now)
+    if paired is not None or not acc.include_in_total or not acc.confirmed:
+        if paired is not None:
+            other = session.get(Account, paired.account_id)
+            if other is not None:
+                recompute_balance(session, other, now)
         _evaluate_new(session, tx, paired, notify=True, now=now)
         return
-    # Email đã chờ webhook 6 giờ: vẫn gửi tin để người dùng phân loại, dù giao dịch đã cũ.
     reevaluate_and_notify(session, reason="tx", tx=tx, now=now)
 
 

@@ -223,3 +223,16 @@ def test_body_limit(client):
     r = client.post("/webhooks/sepay", content="x" * 70_000,
                     headers={"Authorization": "Apikey sepay-test-key-0123456789abcdef"})
     assert r.status_code == 413
+
+
+def test_chunked_body_limit(client):
+    def gen():
+        for _ in range(20):
+            yield b"x" * 8192
+
+    r = client.post("/webhooks/sepay", content=gen(),
+                    headers={"Authorization": "Apikey sepay-test-key-0123456789abcdef"})
+    assert r.status_code == 413
+    # FastAPI tự bắt lỗi khi đọc body JSON nên trả 400, nhưng body vẫn bị cắt ngay khi vượt giới hạn
+    r = client.post("/api/goals", content=gen(), headers={"Content-Type": "application/json"})
+    assert r.status_code in (400, 413)

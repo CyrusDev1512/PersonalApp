@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import imaplib
 import shlex
+import ssl
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -95,6 +96,8 @@ class FakeImap:
             msg = self.messages.get(uid)
             if msg is None:
                 return "OK", [None]
+            if args[1] == "(RFC822.SIZE)":
+                return "OK", [self._enc(f"{uid} (UID {uid} RFC822.SIZE {len(msg.raw)})")]
             head = f"{uid} (UID {uid} BODY[] {{{len(msg.raw)}}}"
             return "OK", [(self._enc(head), msg.raw), self._enc(")")]
         if command == "STORE":
@@ -138,7 +141,7 @@ class FakeImap:
 
     # --- tiện cho assert ---
     def fetched_uids(self) -> list[int]:
-        return [int(c[2]) for c in self.commands if c[:2] == ("UID", "FETCH")]
+        return [int(c[2]) for c in self.commands if c[:2] == ("UID", "FETCH") and c[3] != "(RFC822.SIZE)"]
 
     def searches(self) -> list[tuple]:
         return [c[2:] for c in self.commands if c[:2] == ("UID", "SEARCH")]
@@ -158,7 +161,7 @@ def other(n: int, d: date = date(2026, 10, 14)) -> FakeMsg:
 
 def assert_read_only(fake: FakeImap) -> None:
     assert all(c[2] is True for c in fake.commands if c[0] == "SELECT")
-    fetches = [c for c in fake.commands if c[:2] == ("UID", "FETCH")]
+    fetches = [c for c in fake.commands if c[:2] == ("UID", "FETCH") and c[3] != "(RFC822.SIZE)"]
     assert all(c[3] == "(BODY.PEEK[])" for c in fetches)
     assert not any(c[:2] == ("UID", "STORE") for c in fake.commands)
 
@@ -385,8 +388,9 @@ class FakeSSL:
     instances: list[FakeSSL] = []
     fail_login = False
 
-    def __init__(self, host, port, timeout=None):
+    def __init__(self, host, port, ssl_context=None, timeout=None):
         self.args = (host, port, timeout)
+        self.ssl_context = ssl_context
         self.login_args = None
         self.logged_out = False
         FakeSSL.instances.append(self)
@@ -422,6 +426,20 @@ def test_make_imap_connection(fake_ssl):
     assert conn.args == ("imap.example.invalid", 993, 30)
     assert conn.login_args == ("u@example.invalid", "app-password")
     assert not conn.logged_out
+    # Chứng chỉ máy chủ phải được kiểm tra (tránh MITM lấy app password)
+    assert conn.ssl_context is not None
+    assert conn.ssl_context.verify_mode == ssl.CERT_REQUIRED and conn.ssl_context.check_hostname
+
+
+def test_oversized_message_skipped(monkeypatch):
+    small = vcb(1)
+    big = FakeMsg(small.sender, small.internal_date, small.raw + b"x" * (imap_client.MAX_MESSAGE_BYTES + 1))
+    fake = FakeImap({1: small, 2: big, 3: vcb(3)})
+    msgs, state = fetch_new_messages(fake, "INBOX", ImapState(uidvalidity=1000, last_uid=0), ["vietcombank.com.vn"],
+                                     None)
+    assert [m.uid for m in msgs] == [1, 3]
+    assert 2 not in fake.fetched_uids()
+    assert state.last_uid == 3
 
 
 def test_make_imap_connection_login_failure_logs_out(fake_ssl):
