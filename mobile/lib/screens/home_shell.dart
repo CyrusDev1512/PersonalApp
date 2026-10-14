@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
+import '../state/home_tabs.dart';
 import 'alerts_screen.dart';
 import 'dashboard_screen.dart';
 import 'settings_screen.dart';
@@ -28,10 +29,15 @@ class _HomeShellState extends State<HomeShell> {
   /// Mở tab Giao dịch với bộ lọc "Chưa phân loại" (khi đi từ chip ở Tổng quan).
   final _transactions = TransactionsController();
 
+  /// Yêu cầu chuyển tab từ ngoài (bấm thông báo đẩy); có thể không có (test dựng HomeShell riêng).
+  HomeTabRequests? _tabRequests;
+
   @override
   void initState() {
     super.initState();
-    _index = widget.initialIndex;
+    _tabRequests = Provider.of<HomeTabRequests?>(context, listen: false);
+    _tabRequests?.addListener(_onTabRequest);
+    _index = _validIndex(_tabRequests?.take()) ?? widget.initialIndex;
     _opened.add(_index);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -42,8 +48,16 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   void dispose() {
+    _tabRequests?.removeListener(_onTabRequest);
     _transactions.dispose();
     super.dispose();
+  }
+
+  static int? _validIndex(int? index) => index != null && index >= 0 && index <= HomeTab.settings ? index : null;
+
+  void _onTabRequest() {
+    final index = _validIndex(_tabRequests?.take());
+    if (index != null && mounted) _select(index);
   }
 
   void _select(int index) {
@@ -55,7 +69,7 @@ class _HomeShellState extends State<HomeShell> {
 
   void _openUncategorized() {
     _transactions.showUncategorized();
-    _select(1);
+    _select(HomeTab.transactions);
   }
 
   @override
@@ -63,10 +77,10 @@ class _HomeShellState extends State<HomeShell> {
     final unread = context.select<AppState, int>((s) => s.summary?.unreadAlerts ?? 0);
     // Giữ trạng thái các tab (tháng, bộ lọc, vị trí cuộn, chữ đang gõ) khi chuyển tab; tab tự tải lại khi hiện lại.
     final tabs = <Widget>[
-      DashboardScreen(onOpenUncategorized: _openUncategorized, onOpenAlerts: () => _select(2)),
-      TransactionsScreen(controller: _transactions, active: _index == 1),
-      AlertsScreen(active: _index == 2),
-      SettingsScreen(active: _index == 3),
+      DashboardScreen(onOpenUncategorized: _openUncategorized, onOpenAlerts: () => _select(HomeTab.alerts)),
+      TransactionsScreen(controller: _transactions, active: _index == HomeTab.transactions),
+      AlertsScreen(active: _index == HomeTab.alerts),
+      SettingsScreen(active: _index == HomeTab.settings),
     ];
     final body = IndexedStack(
       index: _index,

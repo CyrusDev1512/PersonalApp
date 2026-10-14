@@ -45,6 +45,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   ApiClient? _client;
   bool _initialized;
+
+  /// Đã tải được dữ liệu từ máy chủ ít nhất một lần với [_client] hiện tại.
+  bool _confirmed = false;
   Summary? _summary;
   List<GoalView> _nextMonthGoals = const [];
   String? _nextMonth;
@@ -61,6 +64,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   ApiClient? get client => _client;
   bool get isConnected => _client != null;
+
+  /// [client] khi kết nối đã được xác nhận (tải tổng quan từ máy chủ thành công ít nhất một lần);
+  /// `null` khi chưa kết nối hoặc mới chỉ có bản lưu offline.
+  ApiClient? get confirmedClient => _confirmed ? _client : null;
 
   /// Đã đọc xong thông tin kết nối đã lưu.
   bool get initialized => _initialized;
@@ -148,6 +155,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   void _setClient(ApiClient? client) {
     _generation++;
     _client = client;
+    _confirmed = false;
     _initialized = true;
     _summary = null;
     _nextMonthGoals = const [];
@@ -193,6 +201,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _applyLoaded(Summary s) {
+    _confirmed = _client != null;
     _summary = s;
     _error = null;
     _lastLoadedAt = now();

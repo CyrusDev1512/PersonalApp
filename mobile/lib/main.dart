@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -5,17 +7,23 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'models/goal.dart';
+import 'push/firebase_push_service.dart';
+import 'push/push_navigator.dart';
+import 'push/push_service.dart';
 import 'screens/connect_screen.dart';
 import 'screens/goal_form_screen.dart';
 import 'screens/home_shell.dart';
 import 'screens/manual_tx_screen.dart';
 import 'state/app_state.dart';
+import 'state/home_tabs.dart';
+import 'state/push_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('vi_VN');
   Intl.defaultLocale = 'vi_VN';
-  runApp(const PersonalFinanceApp());
+  // Firebase chỉ được khởi tạo sau khi kết nối máy chủ; thiếu google-services.json thì push tự tắt.
+  runApp(PersonalFinanceApp(push: FirebasePushService()));
 }
 
 /// Theme Material 3, màu chủ đạo teal.
@@ -29,39 +37,23 @@ ThemeData buildTheme(Brightness brightness) => ThemeData(
 ///
 /// [state] cho phép test truyền sẵn AppState (với ApiClient giả); mặc định app tự tạo
 /// AppState đọc URL/token từ shared_preferences.
-class PersonalFinanceApp extends StatelessWidget {
+/// [push]: dịch vụ thông báo đẩy (main() dùng Firebase); mặc định [NoopPushService] (không có push).
+class PersonalFinanceApp extends StatefulWidget {
   const PersonalFinanceApp({
     super.key,
     this.state,
     this.clientFactory,
     this.refreshInterval = const Duration(seconds: 30),
+    this.push,
   });
 
   final AppState? state;
   final ApiClientFactory? clientFactory;
   final Duration? refreshInterval;
+  final PushService? push;
 
   @override
-  Widget build(BuildContext context) {
-    final app = MaterialApp(
-      title: 'Chi tiêu',
-      debugShowCheckedModeBanner: false,
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
-      locale: const Locale('vi', 'VN'),
-      supportedLocales: const [Locale('vi', 'VN'), Locale('en', 'US')],
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      home: const RootGate(),
-      routes: {HomeShell.routeName: (_) => const HomeShell(), ManualTxScreen.routeName: (_) => const ManualTxScreen()},
-      onGenerateRoute: _onGenerateRoute,
-    );
-    final existing = state;
-    if (existing != null) return ChangeNotifierProvider<AppState>.value(value: existing, child: app);
-    return ChangeNotifierProvider<AppState>(
-      create: (_) => AppState(clientFactory: clientFactory, refreshInterval: refreshInterval),
-      child: app,
-    );
-  }
+  State<PersonalFinanceApp> createState() => _PersonalFinanceAppState();
 
   static Route<dynamic>? _onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -80,6 +72,75 @@ class PersonalFinanceApp extends StatelessWidget {
         return MaterialPageRoute<bool>(settings: settings, builder: (_) => const ConnectScreen(popOnSuccess: true));
     }
     return null;
+  }
+}
+
+class _PersonalFinanceAppState extends State<PersonalFinanceApp> {
+  /// Dùng để mở bảng giao dịch / hộp thoại và hiện SnackBar khi có thông báo đẩy.
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
+  final _tabs = HomeTabRequests();
+
+  late final AppState _state;
+  late final bool _ownsState;
+  late final PushController _push;
+  late final PushNavigator _pushNavigator;
+  final List<StreamSubscription<PushMessage>> _subscriptions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final provided = widget.state;
+    _ownsState = provided == null;
+    _state = provided ?? AppState(clientFactory: widget.clientFactory, refreshInterval: widget.refreshInterval);
+    _pushNavigator = PushNavigator(
+      state: _state,
+      tabs: _tabs,
+      navigatorKey: _navigatorKey,
+      messengerKey: _messengerKey,
+    );
+    _push = PushController(service: widget.push ?? const NoopPushService());
+    _subscriptions
+      ..add(_push.foregroundMessages.listen(_pushNavigator.handleForeground))
+      ..add(_push.openedMessages.listen((m) => unawaited(_pushNavigator.handleOpened(m))));
+    _push.attach(_state);
+  }
+
+  @override
+  void dispose() {
+    for (final s in _subscriptions) {
+      unawaited(s.cancel());
+    }
+    _push.dispose();
+    _tabs.dispose();
+    if (_ownsState) _state.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = MaterialApp(
+      navigatorKey: _navigatorKey,
+      scaffoldMessengerKey: _messengerKey,
+      title: 'Chi tiêu',
+      debugShowCheckedModeBanner: false,
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
+      locale: const Locale('vi', 'VN'),
+      supportedLocales: const [Locale('vi', 'VN'), Locale('en', 'US')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      home: const RootGate(),
+      routes: {HomeShell.routeName: (_) => const HomeShell(), ManualTxScreen.routeName: (_) => const ManualTxScreen()},
+      onGenerateRoute: PersonalFinanceApp._onGenerateRoute,
+    );
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppState>.value(value: _state),
+        ChangeNotifierProvider<PushController>.value(value: _push),
+        ChangeNotifierProvider<HomeTabRequests>.value(value: _tabs),
+      ],
+      child: app,
+    );
   }
 }
 

@@ -236,6 +236,9 @@ class ApiClient {
         ),
       );
 
+  /// GET /api/transactions/{id} (mở giao dịch khi bấm thông báo đẩy).
+  Future<Tx> getTransaction(int id) async => Tx.fromJson(_map(await _request('GET', '/api/transactions/$id')));
+
   /// Body là tập con của: `category_id`, `goal_id`, `for_next_month`, `excluded`,
   /// `remember_rule`, `rule_pattern`. Trả giao dịch mới kèm tổng quan đã tính lại.
   Future<TxPatchResult> patchTransaction(int id, JsonMap changes) async =>
@@ -315,12 +318,41 @@ class ApiClient {
   Future<List<Alert>> listAlerts({bool unread = false, int limit = 50}) async =>
       _list(await _request('GET', '/api/alerts', query: {'unread': '$unread', 'limit': '$limit'}), Alert.fromJson);
 
+  /// GET /api/alerts/{id} (mở cảnh báo khi bấm thông báo đẩy).
+  Future<Alert> getAlert(int id) async => Alert.fromJson(_map(await _request('GET', '/api/alerts/$id')));
+
   Future<Alert> markAlertRead(int id) async => Alert.fromJson(_map(await _request('POST', '/api/alerts/$id/read')));
 
   /// Trả số cảnh báo được đánh dấu.
   Future<int> markAllAlertsRead() async {
     final data = await _request('POST', '/api/alerts/read-all');
     return data is Map ? asInt(data['updated']) : 0;
+  }
+
+  // ------------------------------------------------------------ thông báo đẩy
+
+  /// POST /api/devices: đăng ký (hoặc cập nhật) token FCM của máy này.
+  Future<DeviceRegistration> registerDevice({
+    required String token,
+    required String platform,
+    required String appVersion,
+  }) async => DeviceRegistration.fromJson(
+    _map(
+      await _request('POST', '/api/devices', body: {'token': token, 'platform': platform, 'app_version': appVersion}),
+    ),
+  );
+
+  /// DELETE /api/devices/{token} (idempotent; token được URL-encode trong path).
+  Future<void> unregisterDevice(String token) async {
+    await _request('DELETE', '/api/devices/${Uri.encodeComponent(token)}');
+  }
+
+  Future<DeviceList> listDevices() async => DeviceList.fromJson(_map(await _request('GET', '/api/devices')));
+
+  /// POST /api/devices/test: gửi một thông báo thử tới mọi thiết bị.
+  Future<TestPushResult> sendTestPush() async {
+    final data = await _request('POST', '/api/devices/test');
+    return TestPushResult.fromJson(data is Map ? asMap(data) : const {});
   }
 
   // ---------------------------------------------------------------- settings

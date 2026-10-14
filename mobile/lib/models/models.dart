@@ -5,6 +5,8 @@ export 'account.dart';
 export 'alert.dart';
 export 'app_settings.dart';
 export 'category.dart';
+export 'device.dart';
+export 'forecast.dart';
 export 'goal.dart';
 export 'json_utils.dart';
 export 'level.dart';

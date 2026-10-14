@@ -1,5 +1,6 @@
 import 'account.dart';
 import 'alert.dart';
+import 'forecast.dart';
 import 'goal.dart';
 import 'json_utils.dart';
 import 'level.dart';
@@ -79,6 +80,7 @@ class Summary {
     this.unreadAlerts = 0,
     this.latestAlerts = const [],
     this.ingestHealth = const IngestHealth(),
+    this.forecast,
   });
 
   final String month;
@@ -107,6 +109,9 @@ class Summary {
   final int unreadAlerts;
   final List<Alert> latestAlerts;
   final IngestHealth ingestHealth;
+
+  /// Dự báo cuối tháng; `null` khi xem tháng cũ hoặc server chưa hỗ trợ.
+  final Forecast? forecast;
 
   /// Có TK tính vào tổng mà số dư chỉ là ước tính.
   bool get anyBalanceDerived => accounts.any((a) => a.includeInTotal && a.balanceKnown && a.balanceDerived);
@@ -139,10 +144,12 @@ class Summary {
     unreadAlerts: unreadAlerts ?? this.unreadAlerts,
     latestAlerts: latestAlerts ?? this.latestAlerts,
     ingestHealth: ingestHealth,
+    forecast: forecast,
   );
 
   factory Summary.fromJson(JsonMap json) {
     final rawIncome = json['expected_income'];
+    final rawForecast = json['forecast'];
     final balance = asIntOrNull(json['balance']);
     return Summary(
       month: asString(json['month']),
@@ -165,6 +172,7 @@ class Summary {
       unreadAlerts: asInt(json['unread_alerts']),
       latestAlerts: asList(json['latest_alerts'], Alert.fromJson),
       ingestHealth: IngestHealth.fromJson(asMap(json['ingest_health'])),
+      forecast: rawForecast is Map ? Forecast.fromJson(asMap(rawForecast)) : null,
     );
   }
 }
