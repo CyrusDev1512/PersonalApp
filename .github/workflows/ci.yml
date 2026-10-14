@@ -38,8 +38,14 @@ jobs:
 
   apk:
     # Build APK (release, ký bằng debug key) để cài thử; tải ở mục Artifacts của lần chạy.
+    # firebase=none: không có google-services.json (thông báo đẩy tắt, app vẫn chạy).
+    # firebase=dummy: google-services.json giả (id không có thật) để chứng minh build được khi bật Firebase.
     needs: mobile
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        firebase: [none, dummy]
     defaults:
       run:
         working-directory: mobile
@@ -54,8 +60,11 @@ jobs:
           flutter-version: "3.47.7"
           channel: stable
       - run: flutter pub get
+      - name: Dùng google-services.json giả (id Firebase không có thật)
+        if: matrix.firebase == 'dummy'
+        run: cp android/ci/google-services.dummy.json android/app/google-services.json
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
-          name: chi-tieu-apk
+          name: chi-tieu-apk-firebase-${{ matrix.firebase }}
           path: mobile/build/app/outputs/flutter-apk/app-release.apk
