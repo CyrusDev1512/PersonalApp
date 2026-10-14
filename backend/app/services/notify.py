@@ -245,6 +245,12 @@ def _separate_alerts(
 
 def _maybe_unknown_notice(session: Session, ev: Evaluation) -> None:
     if ev.level != "UNKNOWN":
+        # Đã biết số dư -> nhắc "chưa biết số dư" cũ không còn ý nghĩa
+        for a in session.exec(
+            select(Alert).where(Alert.kind == "account", Alert.level == "UNKNOWN", Alert.read == False)  # noqa: E712
+        ).all():
+            a.read = True
+            session.add(a)
         return
     key = f"unknown:{ev.month}"
     if session.get(AlertState, key) is not None:

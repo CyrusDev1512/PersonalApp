@@ -1,0 +1,34 @@
+services:
+  app:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false  # thiếu APP_TOKEN thì server tự báo lỗi và dừng
+    environment:
+      DATABASE_URL: sqlite:////data/app.db
+    volumes:
+      - app-data:/data
+    ports:
+      # Mặc định chỉ mở cho máy này. Muốn điện thoại trong mạng LAN truy cập: BIND_ADDR=0.0.0.0 trong .env
+      - "${BIND_ADDR:-127.0.0.1}:8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  # Cloudflare Tunnel (tuỳ chọn): docker compose --profile tunnel up -d
+  # Trong Cloudflare Zero Trust, trỏ Public Hostname tới http://app:8000
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - app
+    restart: unless-stopped
+    profiles: ["tunnel"]
+
+volumes:
+  app-data:

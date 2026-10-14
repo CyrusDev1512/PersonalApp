@@ -1,0 +1,20 @@
+Delivered-To: nguoidung.synthetic@example.com
+Received: by 2002:a05:0000:0000:b0:000:0000:0000 with SMTP id synthetic; Wed,
+ 14 Oct 2026 03:21:06 -0700
+Authentication-Results: mx.google.com; dkim=pass header.i=@vietcombank.com.vn
+ header.s=synth1 header.b=SyNtHeTiC; spf=pass (google.com: domain of
+ noreply@info.vietcombank.com.vn designates 192.0.2.10 as permitted sender)
+ smtp.mailfrom=noreply@info.vietcombank.com.vn; dmarc=pass (p=REJECT sp=REJECT
+ dis=NONE) header.from=vietcombank.com.vn
+From: Vietcombank <noreply@vietcombank.com.vn>
+To: nguoidung.synthetic@example.com
+Subject: Thong bao bien dong so du
+Date: Wed, 14 Oct 2026 10:21:05 +0700
+Message-ID: <synthetic-vcb_sms_style_in@example.invalid>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Quy khach than men,
+SD TK 0011004xxxxxx +2,500,000VND luc 14-10-2026 08:05:11. SD 12,500,000VND. Ref MBVCB.12345678.CT tu 0123456789 NGUYEN VAN B toi 0011004xxxxxx NGUYEN VAN A
+Tran trong.

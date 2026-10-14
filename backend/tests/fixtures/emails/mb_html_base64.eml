@@ -1,0 +1,33 @@
+Delivered-To: nguoidung.synthetic@example.com
+Received: by 2002:a05:0000:0000:b0:000:0000:0000 with SMTP id synthetic; Wed,
+ 14 Oct 2026 03:21:06 -0700
+Authentication-Results: mx.google.com; dkim=pass header.d=mbbank.com.vn
+ header.s=synth2 header.b=SyNtHeTiC; spf=pass (google.com: domain of
+ noreply@mbbank.com.vn designates 192.0.2.20 as permitted sender)
+ smtp.mailfrom=noreply@mbbank.com.vn
+From: MB Bank <noreply@mbbank.com.vn>
+To: nguoidung.synthetic@example.com
+Subject: =?utf-8?b?VGjDtG5nIGLDoW8gYmnhur9uIMSR4buZbmcgc+G7kSBkxrA=?=
+Date: Wed, 14 Oct 2026 10:21:05 +0700
+Message-ID: <synthetic-mb_html_base64@example.invalid>
+MIME-Version: 1.0
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: base64
+
+PCFET0NUWVBFIGh0bWw+PGh0bWw+PGhlYWQ+PG1ldGEgY2hhcnNldD0ndXRmLTgnPjx0aXRsZT5U
+aMO0bmcgYsOhbzwvdGl0bGU+PHN0eWxlPnRke2ZvbnQtZmFtaWx5OkFyaWFsfTwvc3R5bGU+PC9o
+ZWFkPjxib2R5PjxoMz5NQiB0aMO0bmcgYsOhbyBiaeG6v24gxJHhu5luZyBz4buRIGTGsDwvaDM+
+PHA+S8OtbmggZ+G7rWkgUXXDvSBraMOhY2ggTkdVWUVOIFZBTiBBLDwvcD48dGFibGUgYm9yZGVy
+PScxJyBjZWxsc3BhY2luZz0nMCc+PHRyPjx0ZCBzdHlsZT0ncGFkZGluZzo0cHgnPlTDoGkga2hv
+4bqjbjwvdGQ+PHRkPjxiPjAxMjM0NTY3ODk8L2I+PC90ZD48L3RyPjx0cj48dGQgc3R5bGU9J3Bh
+ZGRpbmc6NHB4Jz5UaOG7nWkgZ2lhbjwvdGQ+PHRkPjxiPjE0LzEwLzIwMjYgMTE6NDU6MDA8L2I+
+PC90ZD48L3RyPjx0cj48dGQgc3R5bGU9J3BhZGRpbmc6NHB4Jz5T4buRIHRp4buBbiBnaWFvIGTh
+u4tjaDwvdGQ+PHRkPjxiPisxLjIwMC4wMDAgVk5EPC9iPjwvdGQ+PC90cj48dHI+PHRkIHN0eWxl
+PSdwYWRkaW5nOjRweCc+U+G7kSBkxrA8L3RkPjx0ZD48Yj43LjcwMC4wMDAgVk5EPC9iPjwvdGQ+
+PC90cj48dHI+PHRkIHN0eWxlPSdwYWRkaW5nOjRweCc+TuG7mWkgZHVuZzwvdGQ+PHRkPjxiPlRS
+QU4gVEhJIEIgaG9hbiB0aWVuIGFuIHRydWE8L2I+PC90ZD48L3RyPjx0cj48dGQgc3R5bGU9J3Bh
+ZGRpbmc6NHB4Jz5Nw6MgZ2lhbyBk4buLY2g8L3RkPjx0ZD48Yj5GVDI2Mjg3MTIzNDU2PC9iPjwv
+dGQ+PC90cj48L3RhYmxlPjxwPlRyw6JuIHRy4buNbmcgY+G6o20gxqFuIFF1w70ga2jDoWNoITxi
+ci8+VOG6p25nIDUsIFTDsmEgbmjDoCBOZ8OibiBow6BuZyBN4bqrdSwgSMOgIE7hu5lpLiBIb3Rs
+aW5lIDE5MDAgMDAwMCAoc+G7kSBnaeG6oyBs4bqtcCkuPC9wPjxzY3JpcHQ+dmFyIHggPSAnU+G7
+kSB0aeG7gW46IDkuOTk5Ljk5OSBWTkQnOzwvc2NyaXB0PjwvYm9keT48L2h0bWw+Cg==

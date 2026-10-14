@@ -1,0 +1,18 @@
+Delivered-To: nguoidung.synthetic@example.com
+Received: by 2002:a05:0000:0000:b0:000:0000:0000 with SMTP id synthetic; Wed,
+ 14 Oct 2026 03:21:06 -0700
+Authentication-Results: mx.google.com; dkim=fail (body hash did not verify)
+ header.d=vietcombank.com.vn header.s=synth1; spf=softfail
+ smtp.mailfrom=vietcombank.com.vn; dmarc=fail (p=REJECT)
+ header.from=vietcombank.com.vn
+From: Vietcombank <noreply@vietcombank.com.vn>
+To: nguoidung.synthetic@example.com
+Subject: =?utf-8?b?VGjDtG5nIGLDoW8gZ2lhbyBk4buLY2g=?=
+Date: Wed, 14 Oct 2026 10:21:05 +0700
+Message-ID: <synthetic-vcb_dkim_fail@example.invalid>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Số tiền: +9,000,000 VND
+Số dư: 19,000,000 VND

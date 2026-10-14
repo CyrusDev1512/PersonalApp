@@ -1,0 +1,34 @@
+Delivered-To: nguoidung.synthetic@example.com
+Received: by 2002:a05:0000:0000:b0:000:0000:0000 with SMTP id synthetic; Wed,
+ 14 Oct 2026 03:21:06 -0700
+Authentication-Results: mx.google.com; dkim=pass header.i=@vietcombank.com.vn
+ header.s=synth1 header.b=SyNtHeTiC; spf=pass (google.com: domain of
+ noreply@info.vietcombank.com.vn designates 192.0.2.10 as permitted sender)
+ smtp.mailfrom=noreply@info.vietcombank.com.vn; dmarc=pass (p=REJECT sp=REJECT
+ dis=NONE) header.from=vietcombank.com.vn
+From: VCB Digibank <noreply@info.vietcombank.com.vn>
+To: nguoidung.synthetic@example.com
+Subject: =?utf-8?b?VGjDtG5nIGLDoW8gZ2lhbyBk4buLY2g=?=
+Date: Wed, 14 Oct 2026 10:21:05 +0700
+Message-ID: <synthetic-vcb_credit_table_html@example.invalid>
+MIME-Version: 1.0
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html><html><head><meta charset=3D'utf-8'><title>Th=C3=B4ng b=C3=A1o=
+</title><style>td{font-family:Arial}</style></head><body><h3>Vietcombank th=
+=C3=B4ng b=C3=A1o giao d=E1=BB=8Bch</h3><p>K=C3=ADnh g=E1=BB=ADi Qu=C3=BD kh=
+=C3=A1ch NGUYEN VAN A,</p><table border=3D'1' cellspacing=3D'0'><tr><td style=
+=3D'padding:4px'>S=E1=BB=91 t=C3=A0i kho=E1=BA=A3n</td><td><b>0011001234567</=
+b></td></tr><tr><td style=3D'padding:4px'>Th=E1=BB=9Di gian giao d=E1=BB=8Bch=
+</td><td><b>14/10/2026 10:20:30</b></td></tr><tr><td style=3D'padding:4px'>Lo=
+=E1=BA=A1i giao d=E1=BB=8Bch</td><td><b>Ghi c=C3=B3</b></td></tr><tr><td styl=
+e=3D'padding:4px'>S=E1=BB=91 ti=E1=BB=81n</td><td><b>1,000,000 VND</b></td></=
+tr><tr><td style=3D'padding:4px'>S=E1=BB=91 d=C6=B0 cu=E1=BB=91i</td><td><b>1=
+1,000,000 VND</b></td></tr><tr><td style=3D'padding:4px'>N=E1=BB=99i dung</td=
+><td><b>NGUYEN VAN B chuyen tien an trua</b></td></tr><tr><td style=3D'paddin=
+g:4px'>S=E1=BB=91 tham chi=E1=BA=BFu</td><td><b>5123ABC987</b></td></tr></tab=
+le><p>Tr=C3=A2n tr=E1=BB=8Dng c=E1=BA=A3m =C6=A1n Qu=C3=BD kh=C3=A1ch!<br/>T=
+=E1=BA=A7ng 5, T=C3=B2a nh=C3=A0 Ng=C3=A2n h=C3=A0ng M=E1=BA=ABu, H=C3=A0 N=
+=E1=BB=99i. Hotline 1900 0000 (s=E1=BB=91 gi=E1=BA=A3 l=E1=BA=ADp).</p><scrip=
+t>var x =3D 'S=E1=BB=91 ti=E1=BB=81n: 9.999.999 VND';</script></body></html>

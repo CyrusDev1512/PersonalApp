@@ -1,0 +1,17 @@
+Delivered-To: nguoidung.synthetic@example.com
+Received: by 2002:a05:0000:0000:b0:000:0000:0000 with SMTP id synthetic; Wed,
+ 14 Oct 2026 03:21:06 -0700
+Authentication-Results: mx.google.com; dkim=pass header.i=@mbbank.com.vn
+ header.s=synth2; dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE)
+ header.from=mbbank.com.vn
+Authentication-Results: relay.internal.mbbank.com.vn; none
+From: MB Bank <noreply@mbbank.com.vn>
+To: nguoidung.synthetic@example.com
+Subject: MB =?utf-8?b?dGjDtG5nIGLDoW8gYmnhur9uIMSR4buZbmcgc+G7kSBkxrA=?=
+Date: Wed, 14 Oct 2026 10:21:05 +0700
+Message-ID: <synthetic-mb_multiple_auth_results@example.invalid>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+TK 0xxx1234|GD: -200,000VND 14/10/26 13:00|SD: 6,300,000VND|ND: DIEN THOAI
