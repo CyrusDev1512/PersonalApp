@@ -21,14 +21,16 @@ def included_accounts(session: Session) -> list[Account]:
     ).all())
 
 
-def build_evaluation(session: Session, month: str | None = None, now: datetime | None = None) -> Evaluation:
-    now = now or clock.now()
-    cur = clock.month_of(now)
-    month = month or cur
-    if month == cur:
-        ensure_month_goals(session, month)
+def tx_in(t: Transaction) -> TxIn:
+    return TxIn(id=t.id, direction=t.direction, amount=t.amount, bank_time=t.bank_time, category_id=t.category_id,
+                goal_id=t.goal_id)
 
-    cats = {c.id: c for c in session.exec(select(Category)).all()}
+
+def month_inputs(session: Session, month: str, cats: dict[int, Category] | None = None
+                 ) -> tuple[list[GoalIn], list[Transaction]]:
+    """Mục tiêu của tháng (dạng GoalIn) + giao dịch active liên quan (trong tháng hoặc gán thẳng mục tiêu tháng)."""
+    if cats is None:
+        cats = {c.id: c for c in session.exec(select(Category)).all()}
     goals = goals_for_month(session, month)
     series_rank = dict(session.exec(
         select(Goal.series_id, func.min(Goal.id)).where(Goal.series_id.in_([g.series_id for g in goals]))
@@ -49,12 +51,21 @@ def build_evaluation(session: Session, month: str | None = None, now: datetime |
     cond = (Transaction.bank_time >= start) & (Transaction.bank_time < end)
     if goal_ids:
         cond = or_(cond, Transaction.goal_id.in_(goal_ids))
-    txs = session.exec(select(Transaction).where(Transaction.status == "active", cond)).all()
-    tx_ins = [
-        TxIn(id=t.id, direction=t.direction, amount=t.amount, bank_time=t.bank_time, category_id=t.category_id,
-             goal_id=t.goal_id)
-        for t in txs
-    ]
+    txs = list(session.exec(select(Transaction).where(Transaction.status == "active", cond)).all())
+    return goal_ins, txs
+
+
+def build_evaluation(session: Session, month: str | None = None, now: datetime | None = None) -> Evaluation:
+    now = now or clock.now()
+    cur = clock.month_of(now)
+    month = month or cur
+    if month == cur:
+        ensure_month_goals(session, month)
+
+    cats = {c.id: c for c in session.exec(select(Category)).all()}
+    goal_ins, txs = month_inputs(session, month, cats)
+    tx_ins = [tx_in(t) for t in txs]
+    start, end = clock.month_bounds_utc(month)
 
     accounts = included_accounts(session)
     balance: int | None = None

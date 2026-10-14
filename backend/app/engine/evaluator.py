@@ -114,21 +114,31 @@ def auto_match_ids(goals: list[GoalIn]) -> set[int]:
     return out
 
 
-def compute_goal_views(goals: list[GoalIn], txs: list[TxIn]) -> list[GoalView]:
+def attribute_goals(goals: list[GoalIn], txs: list[TxIn]) -> dict[int, int]:
+    """Giao dịch nào được tính cho mục tiêu nào: {tx_id: goal_id}. Mỗi giao dịch tối đa một mục tiêu."""
     auto = auto_match_ids(goals)
-    by_id = {g.id: g for g in goals}
+    by_id = {g.id for g in goals}
     auto_by_cat_month = {(g.category_id, g.month): g.id for g in goals if g.id in auto}
-    totals: dict[int, int] = {g.id: 0 for g in goals}
+    out: dict[int, int] = {}
     for tx in txs:
         if tx.goal_id is not None:
             if tx.goal_id in by_id:
-                totals[tx.goal_id] += _signed_spend(tx)
+                out[tx.id] = tx.goal_id
             continue
         if tx.category_id is None:
             continue
         gid = auto_by_cat_month.get((tx.category_id, clock.month_of(tx.bank_time)))
         if gid is not None:
-            totals[gid] += _signed_spend(tx)
+            out[tx.id] = gid
+    return out
+
+
+def compute_goal_views(goals: list[GoalIn], txs: list[TxIn]) -> list[GoalView]:
+    auto = auto_match_ids(goals)
+    totals: dict[int, int] = {g.id: 0 for g in goals}
+    tx_by_id = {tx.id: tx for tx in txs}
+    for tx_id, gid in attribute_goals(goals, txs).items():
+        totals[gid] += _signed_spend(tx_by_id[tx_id])
 
     views: list[GoalView] = []
     for g in sorted(goals, key=lambda g: (g.type != "reserve", g.id)):

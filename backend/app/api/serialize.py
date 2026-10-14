@@ -99,3 +99,24 @@ def evaluation_dict(ev: Evaluation) -> dict:
         "buffer": ev.buffer, "waiting_income": ev.waiting_income, "days_left": ev.days_left,
         "goals": [goal_view_dict(g) for g in ev.goals],
     }
+
+
+def forecast_dict(fc) -> dict | None:
+    if fc is None:
+        return None
+    return {
+        "status": fc.status, "confidence": fc.confidence, "reason": fc.reason, "observed_days": fc.observed_days,
+        "window_days": fc.window_days, "daily_spend": fc.daily_spend, "capped_amount": fc.capped_amount,
+        "capped_count": fc.capped_count, "projected_free_end": fc.projected_free_end,
+        "projected_budget_overrun": fc.projected_budget_overrun, "income_pending": fc.income_pending,
+        "floor_hit_date": fc.floor_hit_date.isoformat() if fc.floor_hit_date else None,
+        "days_until_floor_hit": fc.days_until_floor_hit,
+        "recovers_on": fc.recovers_on.isoformat() if fc.recovers_on else None,
+        "safe_daily_spend": fc.safe_daily_spend, "headline": fc.headline, "details": list(fc.details),
+        "budgets": [
+            {"goal_id": b.goal_id, "name": b.name, "category_icon": b.category_icon, "spent": b.spent,
+             "amount": b.amount, "daily_rate": b.daily_rate, "projected_spent": b.projected_spent,
+             "projected_pct": b.projected_pct, "status": b.status, "suggested_daily": b.suggested_daily}
+            for b in fc.budgets
+        ],
+    }

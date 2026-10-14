@@ -21,7 +21,7 @@ from app.models import Alert
 from app.notify.outbox import wake_outbox
 from app.services.goals import ensure_month_goals
 from app.services.health import health_lines, parse_iso
-from app.services.notify import add_info_alert, reevaluate_and_notify
+from app.services.notify import add_info_alert, check_forecast, reevaluate_and_notify
 from app.services.summary import build_evaluation, uncategorized_count
 
 log = logging.getLogger(__name__)
@@ -54,8 +54,9 @@ async def run_digest() -> None:
     async with write_lock:
         with session_scope() as s:
             ev = build_evaluation(s)
-            title, message = compose_digest(ev, uncategorized_count(s, ev.month), health_lines(s, cfg))
-            danger = ev.level in ("WARNING", "DANGER")
+            fc, forecast_fire = check_forecast(s, ev, clock.now())
+            title, message = compose_digest(ev, uncategorized_count(s, ev.month), health_lines(s, cfg), fc)
+            danger = ev.level in ("WARNING", "DANGER") or forecast_fire
             s.add(Alert(kind="digest", level=ev.level, month=ev.month, title=title, message=message, loud=danger,
                         read=not danger))
             s.commit()

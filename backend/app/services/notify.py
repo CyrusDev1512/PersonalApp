@@ -8,21 +8,24 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlmodel import Session, select
 
 from app import clock
-from app.engine.alerts import FloorDecision, FloorState, decide_budget, decide_floor
+from app.engine.alerts import FloorDecision, FloorState, ForecastState, decide_budget, decide_floor, decide_forecast
 from app.engine.evaluator import Evaluation, GoalView
+from app.engine.forecast import Forecast
 from app.engine.messages import (
     TxInfo,
     compose_budget_message,
     compose_floor_message,
+    compose_forecast_message,
     compose_tx_message,
 )
 from app.models import Account, Alert, AlertState, Category, Goal, Transaction
 from app.services import runtime_settings
+from app.services.forecast import build_forecast
 from app.services.summary import build_evaluation
 
 OUTBOX_SEND_WINDOW = timedelta(hours=24)  # khớp outbox.MAX_AGE
@@ -66,6 +69,32 @@ def _save_floor_state(session: Session, month: str, st: FloorState) -> None:
     row.notified_json = json.dumps({k: v.isoformat() for k, v in st.notified.items()})
     row.last_sent_at = max(st.notified.values(), default=row.last_sent_at)
     session.add(row)
+
+
+def _load_forecast_state(session: Session, month: str) -> ForecastState:
+    row = session.get(AlertState, f"forecast:{month}")
+    if row is None:
+        return ForecastState()
+    data = json.loads(row.notified_json or "{}")
+    hit = data.get("hit")
+    return ForecastState(armed=row.armed, last_sent_at=row.last_sent_at,
+                         last_hit=date.fromisoformat(hit) if hit else None)
+
+
+def _save_forecast_state(session: Session, month: str, st: ForecastState) -> None:
+    key = f"forecast:{month}"
+    row = session.get(AlertState, key) or AlertState(key=key)
+    row.armed, row.last_sent_at = st.armed, st.last_sent_at
+    row.notified_json = json.dumps({"hit": st.last_hit.isoformat() if st.last_hit else None})
+    session.add(row)
+
+
+def check_forecast(session: Session, ev: Evaluation, now: datetime) -> tuple[Forecast | None, bool]:
+    """Tính dự báo và quyết định có báo "sắp chạm mức sàn" không (đã lưu trạng thái chống spam)."""
+    fc = build_forecast(session, ev, now)
+    fire, st = decide_forecast(_load_forecast_state(session, ev.month), fc, ev, now)
+    _save_forecast_state(session, ev.month, st)
+    return fc, fire
 
 
 def _budget_key(goal_id: int, th: int, month: str) -> str:
@@ -183,15 +212,17 @@ def reevaluate_and_notify(
     dec = decide_floor(state, ev, floor_reason, now)
     _save_floor_state(session, ev.month, dec.state)
     budget_fired = _decide_budgets(session, ev)
+    fc, forecast_fire = check_forecast(session, ev, now)
+    fc_fired = fc if forecast_fire else None
     _maybe_unknown_notice(session, ev)
     rs = runtime_settings.load(session)
     snap = _snapshot(ev)
 
     if tx is not None:
-        loud = dec.notify or bool(budget_fired)
+        loud = dec.notify or bool(budget_fired) or forecast_fire
         info = tx_info(session, tx)
         if loud or rs.notify_every_tx:
-            title, message = compose_tx_message(info, ev, dec, budget_fired)
+            title, message = compose_tx_message(info, ev, dec, budget_fired, fc_fired)
             markup = tx_markup(session, tx)
             _add_alert(
                 session, kind="tx", level=dec.level if dec.notify else ev.level, month=ev.month,
@@ -222,10 +253,10 @@ def reevaluate_and_notify(
                 reachable = True  # tin chưa gửi: sẽ được gửi với nội dung mới này
             session.add(existing)
         # Có tin để sửa tại chỗ thì cảnh báo mới chỉ lưu trong app; không có thì gửi thành tin riêng.
-        _separate_alerts(session, ev, dec, budget_fired, reason, snap, deliver=not reachable)
+        _separate_alerts(session, ev, dec, budget_fired, reason, snap, deliver=not reachable, forecast=fc_fired)
         return ev
 
-    _separate_alerts(session, ev, dec, budget_fired, reason, snap, deliver=True)
+    _separate_alerts(session, ev, dec, budget_fired, reason, snap, deliver=True, forecast=fc_fired)
     return ev
 
 
@@ -238,7 +269,12 @@ def _separate_alerts(
     snap: str,
     *,
     deliver: bool,
+    forecast: Forecast | None = None,
 ) -> None:
+    if forecast is not None:
+        title, message = compose_forecast_message(forecast, ev)
+        _add_alert(session, kind="forecast", level="WARNING", month=ev.month, title=title, message=message,
+                   snapshot_json=snap, deliver_telegram=deliver)
     if dec.notify:
         title, message = compose_floor_message(dec, ev, REASON_LABELS.get(reason))
         kind = "safe" if dec.kind == "safe" else "floor"

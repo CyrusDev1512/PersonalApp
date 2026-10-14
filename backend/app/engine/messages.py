@@ -76,11 +76,27 @@ def tx_title(tx: TxInfo, dec: FloorDecision | None, budget_fired: list[tuple[Goa
     return f"💸 Chi {format_vnd(tx.amount)}" if tx.direction == "out" else f"💰 Nhận {format_vnd(tx.amount)}"
 
 
+def forecast_lines(fc) -> list[str]:
+    """Dòng dự báo ngắn gọn để gắn vào tin khác."""
+    lines = [f"📉 Dự báo: {fc.headline}"]
+    lines.extend(d for d in fc.details if d.startswith("Gợi ý"))
+    return lines
+
+
+def compose_forecast_message(fc, ev: Evaluation) -> tuple[str, str]:
+    lines = [fc.headline]
+    if ev.days_left:
+        lines.append(f"Còn {ev.days_left} ngày trong tháng.")
+    lines.extend(fc.details)
+    return "📉 Dự báo chạm mức sàn", "\n".join(lines)
+
+
 def compose_tx_message(
     tx: TxInfo,
     ev: Evaluation,
     dec: FloorDecision | None,
     budget_fired: list[tuple[GoalView, int]],
+    forecast=None,
 ) -> tuple[str, str]:
     sign = "−" if tx.direction == "out" else "+"
     when = clock.to_ict(tx.bank_time).strftime("%H:%M %d/%m")
@@ -101,7 +117,12 @@ def compose_tx_message(
         lines.append(f"{LEVEL_TITLES[ev.level]}: {ev.level_reason}")
     for goal, th in budget_fired:
         lines.append(budget_line(goal, th, ev.days_left))
-    return tx_title(tx, dec, budget_fired), "\n".join(lines)
+    if forecast is not None:
+        lines.extend(forecast_lines(forecast))
+    title = tx_title(tx, dec, budget_fired)
+    if forecast is not None and not (dec is not None and dec.notify) and not budget_fired:
+        title = "📉 Dự báo chạm mức sàn"
+    return title, "\n".join(lines)
 
 
 def compose_floor_message(dec: FloorDecision, ev: Evaluation, reason_label: str | None = None) -> tuple[str, str]:
@@ -118,7 +139,7 @@ def compose_budget_message(goal: GoalView, threshold: int, ev: Evaluation) -> tu
     return title, budget_line(goal, threshold, ev.days_left)
 
 
-def compose_digest(ev: Evaluation, uncategorized: int, health_lines: list[str]) -> tuple[str, str]:
+def compose_digest(ev: Evaluation, uncategorized: int, health_lines: list[str], forecast=None) -> tuple[str, str]:
     title = f"☀️ Bản tin tài chính {clock.to_ict(clock.now()).strftime('%d/%m')}"
     lines = [f"{LEVEL_TITLES.get(ev.level, ev.level)} — {ev.level_reason}"]
     lines.extend(status_lines(ev))
@@ -130,6 +151,9 @@ def compose_digest(ev: Evaluation, uncategorized: int, health_lines: list[str]) 
         )
     if ev.days_left:
         lines.append(f"Còn {ev.days_left} ngày trong tháng.")
+    if forecast is not None and forecast.status == "ok":
+        lines.append(f"📈 Dự báo: {forecast.headline}")
+        lines.extend(f"   {d}" for d in forecast.details if d.startswith(("Gợi ý", "🍜", "📊")) or "ngân sách" in d)
     if uncategorized:
         lines.append(f"🏷️ {uncategorized} giao dịch chưa phân loại — gõ /uncat để phân loại.")
     lines.extend(health_lines)

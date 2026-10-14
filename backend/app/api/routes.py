@@ -28,6 +28,7 @@ from app.models import Account, Alert, Category, CategoryRule, Goal, IngestEvent
 from app.notify.outbox import wake_outbox
 from app.services import runtime_settings, tx_actions
 from app.services.balance import recompute_balance
+from app.services.forecast import build_forecast
 from app.services.goals import auto_goal_for, ensure_goal
 from app.services.health import health_lines
 from app.services.notify import reevaluate_and_notify
@@ -109,6 +110,7 @@ def summary_payload(s: Session, month: str | None = None) -> dict:
         "unread_alerts": unread,
         "latest_alerts": [ser.alert_dict(a) for a in latest],
         "ingest_health": ingest_health(s),
+        "forecast": ser.forecast_dict(build_forecast(s, ev)),
     })
     return data
 

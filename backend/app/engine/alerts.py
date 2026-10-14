@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from app.engine.evaluator import LEVEL_RANK, Evaluation, GoalView
 
@@ -102,3 +102,43 @@ def decide_budget(goal: GoalView, armed: dict[int, bool]) -> tuple[int | None, d
         elif goal.usage_pct < th - BUDGET_REARM_GAP:
             new[th] = True
     return fired, new
+
+
+# ---- dự báo ----------------------------------------------------------------------------------------------
+
+FORECAST_HORIZON_DAYS = 7  # chỉ báo khi dự kiến chạm mức sàn trong 7 ngày tới
+FORECAST_REARM_DAYS = 10  # dự báo xa hơn 10 ngày (hoặc không chạm) thì cho báo lại lần sau
+FORECAST_MIN_SHORTFALL = 200_000  # thiếu ít hơn 200k thì không đáng báo
+FORECAST_ESCALATE_DAYS = 3
+FORECAST_ESCALATE_GAP = timedelta(hours=24)
+
+
+@dataclass
+class ForecastState:
+    armed: bool = True
+    last_sent_at: datetime | None = None
+    last_hit: date | None = None
+
+
+def decide_forecast(state: ForecastState | None, fc, ev: Evaluation, now: datetime) -> tuple[bool, ForecastState]:
+    """Có nên gửi cảnh báo "dự báo chạm mức sàn" không. `fc` là engine.forecast.Forecast (hoặc None)."""
+    state = state or ForecastState()
+    new = replace(state)
+    if fc is None or fc.status != "ok" or ev.level not in ("OK", "WARNING") or not ev.goals:
+        return False, new
+    days = fc.days_until_floor_hit
+    if days is None or days >= FORECAST_REARM_DAYS:
+        new.armed = True
+        return False, new
+    material = fc.min_projected_free is not None and fc.min_projected_free <= -FORECAST_MIN_SHORTFALL
+    if days > FORECAST_HORIZON_DAYS or not material:
+        return False, new
+    if state.armed:
+        new.armed, new.last_sent_at, new.last_hit = False, now, fc.floor_hit_date
+        return True, new
+    earlier = (state.last_hit is not None and fc.floor_hit_date is not None
+               and (state.last_hit - fc.floor_hit_date).days >= FORECAST_ESCALATE_DAYS)
+    if earlier and (state.last_sent_at is None or now - state.last_sent_at >= FORECAST_ESCALATE_GAP):
+        new.last_sent_at, new.last_hit = now, fc.floor_hit_date
+        return True, new
+    return False, new

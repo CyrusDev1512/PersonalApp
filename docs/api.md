@@ -58,6 +58,7 @@
 - `balance`, `free`, `balance_as_of` có thể là `null` khi `balance_known=false` (khi đó `level="UNKNOWN"`).
 - `expected_income` là `null` nếu chưa cài lương dự kiến. `waiting_income=true` nghĩa là đang thiếu nhưng sẽ đủ khi nhận lương.
 - `latest_alerts`: tối đa 5 cảnh báo mới nhất.
+- `forecast`: dự báo cuối tháng (xem mục **Dự báo**), `null` khi xem tháng cũ.
 - `ingest_health.warnings`: các câu cảnh báo tiếng Việt đã soạn sẵn để hiển thị (đọc email lỗi, 48 giờ không có webhook,
   biến động không đọc được...). `stale` = có ít nhất một cảnh báo.
 - `in_transit`: tiền đang chờ ghép chuyển nội bộ (dương = tiền ra được cộng lại tạm, âm = tiền vào bị trừ ra tạm).
@@ -88,7 +89,29 @@
  "title": "⚠️ Sắp chạm mức mục tiêu", "message": "−3.500.000đ · VCB ...", "read": false,
  "transaction_id": 55, "goal_id": null}
 ```
-`kind` ∈ `tx` (biến động), `floor`, `safe`, `budget`, `digest`, `account`, `health`, `info`.
+`kind` ∈ `tx` (biến động), `floor`, `safe`, `budget`, `forecast` (dự báo chạm mức sàn), `digest`, `account`, `health`,
+`info`.
+
+### Dự báo (`summary.forecast`)
+```json
+{"status": "ok", "confidence": "normal", "reason": null, "observed_days": 14, "window_days": 14,
+ "daily_spend": 180000, "capped_amount": 4000000, "capped_count": 1, "projected_free_end": -350000,
+ "projected_budget_overrun": 1000000, "income_pending": 0, "floor_hit_date": "2026-10-25",
+ "days_until_floor_hit": 11, "recovers_on": null, "safe_daily_spend": 120000,
+ "headline": "Chi như hiện tại thì khoảng ngày 25/10 sẽ chạm mức sàn",
+ "details": ["Tốc độ chi ngoài mục tiêu: ~180.000đ/ngày (14 ngày gần nhất)",
+             "Gợi ý: chi ngoài mục tiêu tối đa ~120.000đ/ngày để giữ trên mức sàn"],
+ "budgets": [{"goal_id": 2, "name": "Tiền ăn", "category_icon": "🍜", "spent": 2600000, "amount": 5000000,
+              "daily_rate": 200000, "projected_spent": 6000000, "projected_pct": 120.0, "status": "over_pace",
+              "suggested_daily": 133333}]}
+```
+- `status` ∈ `ok`, `insufficient_data` (chưa đủ ~3 ngày dữ liệu; chỉ có `reason`/`headline`), `unavailable` (chưa biết số dư).
+- `confidence` ∈ `normal`, `low` (ước tính sơ bộ, ít ngày dữ liệu).
+- Ngày (`floor_hit_date`, `recovers_on`) là `YYYY-MM-DD` theo giờ VN; `null` nếu không chạm mức sàn / không hồi phục.
+- `daily_spend`: tốc độ chi **ngoài mục tiêu** mỗi ngày (khoản lớn bất thường bị giới hạn — phần vượt ở `capped_amount`).
+- `safe_daily_spend`: mức chi ngoài mục tiêu tối đa mỗi ngày để cuối tháng vẫn trên mức sàn (`null` khi không áp dụng).
+- `budgets[].status` ∈ `on_track`, `over_pace` (theo nhịp sẽ vượt > 5%), `exceeded` (đã vượt).
+- `details`: các dòng giải thích tiếng Việt đã soạn sẵn.
 
 ## Mục tiêu
 - `GET /api/goals?month=YYYY-MM` → `[GoalView]` (không gồm mục tiêu đã xoá).
@@ -113,6 +136,7 @@
 
 ## Giao dịch
 - `GET /api/transactions?month=YYYY-MM&uncategorized=false&limit=50&offset=0` → `{"items": [Tx], "total": 120}` (mới nhất trước).
+- `GET /api/transactions/{id}` → `Tx`.
 - Tx:
   ```json
   {"id": 55, "account_id": 1, "account_name": "VCB chính", "bank": "VCB", "direction": "out", "amount": 3500000,
@@ -145,6 +169,22 @@
 ## Cảnh báo
 - `GET /api/alerts?unread=false&limit=50` → `[Alert]` (mới nhất trước)
 - `POST /api/alerts/{id}/read` → `Alert`; `POST /api/alerts/read-all` → `{"updated": 3}`
+
+- `GET /api/alerts/{id}` → `Alert` (dùng khi bấm thông báo đẩy).
+
+## Thông báo đẩy (Firebase Cloud Messaging)
+- `POST /api/devices` `{"token": "<FCM token>", "platform": "android", "app_version": "1.0.0"}` → `201` (mới) hoặc
+  `200` (đã có, cập nhật) với `{"id": 3, "platform": "android", "app_version": "1.0.0", "last_seen_at": "...Z",
+  "push_enabled": true}`. Server không bao giờ trả lại token. `platform` ∈ `android`, `ios`.
+- `DELETE /api/devices/{token}` → `204` (idempotent; token được URL-encode trong path).
+- `GET /api/devices` → `{"push_enabled": true, "error": null, "devices": [{"id": 3, "platform": "android",
+  "app_version": "1.0.0", "created_at": "...Z", "last_seen_at": "...Z", "last_error": null}]}`
+  (`push_enabled=false` khi server chưa cấu hình Firebase; `error` mô tả lỗi cấu hình nếu có).
+- `POST /api/devices/test` → `202 {"queued": true, "push_enabled": true}` — gửi một thông báo thử tới mọi thiết bị.
+- Server chỉ đẩy các cảnh báo **quan trọng** (cùng loại được Telegram gửi có chuông). Payload FCM:
+  `notification{title, body}` + `data` (mọi giá trị là chuỗi, rỗng nếu không có):
+  `{"alert_id": "10", "kind": "tx", "level": "WARNING", "transaction_id": "55", "goal_id": "", "month": "2026-10"}`.
+  Android dùng kênh thông báo `alerts`.
 
 ## Cài đặt
 - `GET /api/settings` →
