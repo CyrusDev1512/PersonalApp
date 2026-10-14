@@ -231,6 +231,9 @@ class FakePushService implements PushService {
   PushPermission permission;
   bool initOk;
 
+  /// Gọi khi [deleteToken] chạy (để kiểm tra thứ tự so với request DELETE).
+  void Function()? onDeleteToken;
+
   int initCalls = 0;
   int permissionCalls = 0;
   int deleteTokenCalls = 0;
@@ -270,6 +273,7 @@ class FakePushService implements PushService {
 
   @override
   Future<void> deleteToken() async {
+    onDeleteToken?.call();
     deleteTokenCalls++;
     token = null;
   }
