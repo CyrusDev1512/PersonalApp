@@ -88,3 +88,9 @@ class SettingsUpdate(BaseModel):
     expected_income_amount: int | None = Field(default=None, ge=0, le=100_000_000_000)
     expected_income_day: int | None = Field(default=None, ge=0, le=31)
     notify_every_tx: bool | None = None
+
+
+class DeviceRegister(BaseModel):
+    token: str = Field(min_length=10, max_length=4096)
+    platform: Literal["android", "ios"] = "android"
+    app_version: str | None = Field(default=None, max_length=32)

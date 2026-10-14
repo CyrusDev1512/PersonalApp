@@ -8,6 +8,8 @@ services:
       DATABASE_URL: sqlite:////data/app.db
     volumes:
       - app-data:/data
+      # Khoá Firebase cho thông báo đẩy (tuỳ chọn): tạo thư mục ./secrets và đặt file fcm.json vào đó
+      - ./secrets:/run/secrets:ro
     ports:
       # Mặc định chỉ mở cho máy này. Muốn điện thoại trong mạng LAN truy cập: BIND_ADDR=0.0.0.0 trong .env
       - "${BIND_ADDR:-127.0.0.1}:8000:8000"

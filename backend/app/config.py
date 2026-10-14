@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: int | None = None
 
+    # Firebase Cloud Messaging (thông báo đẩy vào app). Khoá service account: đường dẫn file hoặc nội dung JSON.
+    fcm_service_account_file: str = ""
+    fcm_service_account_json: str = ""
+    fcm_project_id: str = ""  # mặc định lấy project_id trong file service account
+
     # Email (IMAP)
     imap_host: str = "imap.gmail.com"
     imap_port: int = 993
@@ -82,6 +87,10 @@ class Settings(BaseSettings):
     @property
     def telegram_enabled(self) -> bool:
         return bool(self.telegram_bot_token)
+
+    @property
+    def push_configured(self) -> bool:
+        return bool(self.fcm_service_account_file or self.fcm_service_account_json)
 
     @property
     def email_enabled(self) -> bool:

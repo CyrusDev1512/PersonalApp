@@ -24,10 +24,12 @@ EDIT_MAX_AGE = timedelta(days=30)  # bot sửa được tin của chính nó lâ
 IDLE_WAIT_SECONDS = 15.0
 
 _wake = asyncio.Event()
+push_wake = asyncio.Event()  # kênh thông báo đẩy (notify/push_outbox.py)
 
 
 def wake_outbox() -> None:
     _wake.set()
+    push_wake.set()
 
 
 @dataclass

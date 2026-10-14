@@ -14,6 +14,7 @@ from app.api.schemas import (
     AccountCreate,
     AccountUpdate,
     CategoryCreate,
+    DeviceRegister,
     GoalCreate,
     GoalUpdate,
     RuleCreate,
@@ -24,7 +25,17 @@ from app.api.schemas import (
 from app.db import kv_get, session_scope, write_lock
 from app.ingest.accounts import cash_account
 from app.ingest.banks import canonical_bank
-from app.models import Account, Alert, Category, CategoryRule, Goal, IngestEvent, Transaction, TransactionSource
+from app.models import (
+    Account,
+    Alert,
+    Category,
+    CategoryRule,
+    Device,
+    Goal,
+    IngestEvent,
+    Transaction,
+    TransactionSource,
+)
 from app.notify.outbox import wake_outbox
 from app.services import runtime_settings, tx_actions
 from app.services.balance import recompute_balance
@@ -561,3 +572,97 @@ async def put_runtime_settings(body: SettingsUpdate) -> dict:
             data = rs.to_dict()
     wake_outbox()
     return data
+
+
+# ---- thông báo đẩy ----------------------------------------------------------------------------------------
+
+MAX_DEVICES = 10
+
+
+def _push_status(s: Session) -> tuple[bool, str | None]:
+    from app.config import get_settings
+
+    if not get_settings().push_configured:
+        return False, None
+    error = (kv_get(s, "health:push", {}) or {}).get("error")
+    return error is None, error
+
+
+def _device_dict(d: Device) -> dict:
+    return {"id": d.id, "platform": d.platform, "app_version": d.app_version, "created_at": ser.iso(d.created_at),
+            "last_seen_at": ser.iso(d.last_seen_at), "last_error": d.last_error}
+
+
+@router.post("/devices")
+async def register_device(body: DeviceRegister, response: Response) -> dict:
+    token = body.token.strip()
+    async with write_lock:
+        with session_scope() as s:
+            device = s.exec(select(Device).where(Device.token == token)).first()
+            if device is None:
+                device = Device(token=token, platform=body.platform, app_version=body.app_version)
+                response.status_code = status.HTTP_201_CREATED
+                others = s.exec(select(Device).order_by(Device.last_seen_at)).all()
+                for old in others[: max(0, len(others) - MAX_DEVICES + 1)]:
+                    s.delete(old)
+            else:
+                device.platform, device.app_version = body.platform, body.app_version or device.app_version
+                device.last_seen_at, device.last_error = clock.now(), None
+            s.add(device)
+            s.commit()
+            enabled, _ = _push_status(s)
+            data = {"id": device.id, "platform": device.platform, "app_version": device.app_version,
+                    "last_seen_at": ser.iso(device.last_seen_at), "push_enabled": enabled}
+    return data
+
+
+@router.delete("/devices/{token:path}", status_code=204)
+async def unregister_device(token: str) -> Response:
+    async with write_lock:
+        with session_scope() as s:
+            device = s.exec(select(Device).where(Device.token == token)).first()
+            if device is not None:
+                s.delete(device)
+                s.commit()
+    return Response(status_code=204)
+
+
+@router.get("/devices")
+def list_devices() -> dict:
+    with session_scope() as s:
+        enabled, error = _push_status(s)
+        devices = s.exec(select(Device).order_by(Device.id)).all()
+        return {"push_enabled": enabled, "error": error, "devices": [_device_dict(d) for d in devices]}
+
+
+@router.post("/devices/test", status_code=202)
+async def test_push() -> dict:
+    from app.notify.push_outbox import TEST_KIND
+
+    async with write_lock:
+        with session_scope() as s:
+            s.add(Alert(kind=TEST_KIND, level="INFO", title="🔔 Thử thông báo",
+                        message="Thông báo đẩy đang hoạt động. Cảnh báo quan trọng sẽ hiện như thế này.",
+                        deliver_telegram=False, loud=True, read=True))
+            s.commit()
+            enabled, _ = _push_status(s)
+    wake_outbox()
+    return {"queued": True, "push_enabled": enabled}
+
+
+@router.get("/transactions/{tx_id}")
+def get_transaction(tx_id: int) -> dict:
+    with session_scope() as s:
+        tx = s.get(Transaction, tx_id)
+        if tx is None:
+            raise _404("giao dịch")
+        return ser.tx_dict(s, tx)
+
+
+@router.get("/alerts/{alert_id}")
+def get_alert(alert_id: int) -> dict:
+    with session_scope() as s:
+        a = s.get(Alert, alert_id)
+        if a is None:
+            raise _404("cảnh báo")
+        return ser.alert_dict(a)

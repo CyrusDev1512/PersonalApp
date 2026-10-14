@@ -212,3 +212,34 @@ class KV(SQLModel, table=True):
 
     key: str = Field(primary_key=True)
     value_json: str = Field(sa_type=Text)
+
+
+class Device(SQLModel, table=True):
+    """Thiết bị nhận thông báo đẩy (FCM token của app)."""
+
+    __tablename__ = "devices"
+
+    id: int | None = Field(default=None, primary_key=True)
+    token: str = Field(sa_type=Text, unique=True)
+    platform: str = "android"  # android | ios
+    app_version: str | None = None
+    created_at: datetime = Field(default_factory=_now, sa_type=UTCDateTime)
+    last_seen_at: datetime = Field(default_factory=_now, sa_type=UTCDateTime)
+    last_error: str | None = None
+
+
+class PushDelivery(SQLModel, table=True):
+    """Một lần đẩy một cảnh báo tới một thiết bị (outbox của kênh push)."""
+
+    __tablename__ = "push_deliveries"
+    __table_args__ = (UniqueConstraint("alert_id", "device_id", name="uq_push_alert_device"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    alert_id: int = Field(foreign_key="alerts.id", index=True)
+    device_id: int = Field(index=True)
+    status: str = Field(default="pending", index=True)  # pending | sent | failed | dropped
+    attempts: int = 0
+    next_attempt_at: datetime | None = Field(default=None, sa_type=UTCDateTime)
+    last_error: str | None = None
+    sent_at: datetime | None = Field(default=None, sa_type=UTCDateTime)
+    created_at: datetime = Field(default_factory=_now, sa_type=UTCDateTime)

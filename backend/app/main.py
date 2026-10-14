@@ -40,6 +40,23 @@ async def _startup_evaluate() -> None:
             s.commit()
 
 
+def _make_fcm(cfg):
+    """Nạp service account Firebase; lỗi thì ghi vào health:push (app vẫn chạy, push tắt)."""
+    from app.db import kv_set
+    from app.notify.fcm import FcmClient, FcmConfigError, ServiceAccount
+
+    try:
+        fcm = FcmClient(ServiceAccount.load(cfg), cfg.fcm_project_id or None)
+        error = None
+    except FcmConfigError as exc:
+        fcm, error = None, str(exc)
+        log.warning("Thông báo đẩy tắt: %s", error)
+    with session_scope() as s:
+        kv_set(s, "health:push", {"error": error})
+        s.commit()
+    return fcm
+
+
 def _start_background(app: FastAPI) -> list[asyncio.Task]:
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -59,6 +76,13 @@ def _start_background(app: FastAPI) -> list[asyncio.Task]:
 
     tasks: list[asyncio.Task] = []
     app.state.stop = asyncio.Event()
+    if cfg.push_configured:
+        fcm = _make_fcm(cfg)
+        if fcm is not None:
+            from app.notify.push_outbox import run_push
+
+            app.state.fcm = fcm
+            tasks.append(asyncio.create_task(run_push(fcm, app.state.stop), name="push-outbox"))
     if cfg.telegram_enabled:
         from app.notify.bot import run_bot
         from app.notify.outbox import run_outbox
@@ -98,9 +122,10 @@ async def lifespan(app: FastAPI):
         for t in tasks:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await t
-        client = getattr(app.state, "telegram", None)
-        if client is not None:
-            await client.aclose()
+        for name in ("telegram", "fcm"):
+            client = getattr(app.state, name, None)
+            if client is not None:
+                await client.aclose()
 
 
 def create_app() -> FastAPI:
