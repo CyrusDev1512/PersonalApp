@@ -9,6 +9,7 @@ import '../utils/dates.dart';
 import '../widgets/account_dialog.dart';
 import '../widgets/alert_tile.dart';
 import '../widgets/common.dart';
+import '../widgets/forecast_card.dart';
 import '../widgets/goal_card.dart';
 import '../widgets/status_banner.dart';
 import 'goal_form_screen.dart';
@@ -89,6 +90,10 @@ class _DashboardBody extends StatelessWidget {
         _BalanceCard(summary: summary, now: state.now()),
         const SizedBox(height: 12),
         StatusBanner(level: summary.level, reason: summary.levelReason, waitingIncome: summary.waitingIncome),
+        if (ForecastCard.shouldShow(summary.forecast)) ...[
+          const SizedBox(height: 12),
+          ForecastCard(forecast: summary.forecast, month: summary.month),
+        ],
         if (needsBalance && client != null) ...[
           const SizedBox(height: 12),
           _UnknownBalanceCard(summary: summary, client: client, onSaved: state.load),

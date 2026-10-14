@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -5,12 +7,13 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
+import '../state/push_controller.dart';
 import '../utils/currency.dart';
 import '../widgets/account_dialog.dart';
 import '../widgets/common.dart';
 import 'connect_screen.dart';
 
-/// Màn "Cài đặt": máy chủ, tài khoản, ngưỡng cảnh báo, lương dự kiến.
+/// Màn "Cài đặt": máy chủ, tài khoản, ngưỡng cảnh báo, lương dự kiến, thông báo đẩy.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, this.active = true});
 
@@ -66,6 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     final client = _client;
     if (client == null) return;
+    unawaited(Provider.of<PushController?>(context, listen: false)?.refreshServerStatus());
     setState(() => _error = null);
     try {
       final results = await Future.wait([client.listAccounts(), client.getSettings()]);
@@ -233,6 +237,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildAccounts(theme),
             const SectionHeader('Cảnh báo'),
             _buildSettingsForm(theme),
+            const SectionHeader('Thông báo đẩy'),
+            const _PushSection(),
           ],
         ),
       ),
@@ -393,6 +399,95 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Mục "Thông báo đẩy": trạng thái đăng ký push của máy này + nút "Gửi thử".
+class _PushSection extends StatefulWidget {
+  const _PushSection();
+
+  @override
+  State<_PushSection> createState() => _PushSectionState();
+}
+
+class _PushSectionState extends State<_PushSection> {
+  bool _sending = false;
+
+  Future<void> _sendTest(PushController push) async {
+    setState(() => _sending = true);
+    try {
+      final result = await push.sendTest();
+      if (!mounted) return;
+      showInfo(
+        context,
+        result.pushEnabled
+            ? 'Đã gửi thông báo thử, chờ vài giây.'
+            : 'Máy chủ chưa cấu hình Firebase nên chưa gửi được thông báo thử.',
+      );
+    } on ApiException catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  static String _help(PushController push) => switch (push.status) {
+    PushStatus.idle => 'Kết nối máy chủ để bật thông báo đẩy.',
+    PushStatus.checking => 'Đang đăng ký máy này với máy chủ…',
+    PushStatus.notAvailableInBuild =>
+      'Bản build này chưa có Firebase — xem README (mục "Thông báo đẩy"). '
+          'Cảnh báo vẫn có ở tab Cảnh báo và Telegram.',
+    PushStatus.permissionDenied =>
+      'Bật quyền thông báo cho "Chi tiêu" trong Cài đặt của điện thoại rồi bấm "Thử lại".',
+    PushStatus.serverNotConfigured => [
+      'Máy chủ chưa cấu hình Firebase (service account FCM) — xem README.',
+      ?push.serverError,
+    ].join(' '),
+    PushStatus.enabled => 'Máy chủ sẽ gửi các cảnh báo quan trọng tới máy này. Bấm "Gửi thử" để kiểm tra.',
+    PushStatus.error => push.errorMessage ?? 'Không bật được thông báo đẩy.',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final push = Provider.of<PushController?>(context);
+    if (push == null) return const SizedBox.shrink();
+    final status = push.status;
+    final enabled = status == PushStatus.enabled;
+    final warn = status == PushStatus.error || status == PushStatus.permissionDenied;
+    final canRetry = warn || status == PushStatus.serverNotConfigured;
+    return Card(
+      child: Column(
+        children: [
+          ListTile(
+            key: const Key('push_status'),
+            leading: Icon(
+              enabled ? Icons.notifications_active_outlined : Icons.notifications_off_outlined,
+              color: enabled
+                  ? Colors.green.shade700
+                  : warn
+                  ? Colors.amber.shade800
+                  : null,
+            ),
+            title: Text(status == PushStatus.error ? '${status.label}: không bật được' : status.label),
+            subtitle: Text(_help(push)),
+          ),
+          OverflowBar(
+            alignment: MainAxisAlignment.end,
+            spacing: 8,
+            children: [
+              if (canRetry) TextButton(onPressed: push.retry, child: const Text('Thử lại')),
+              FilledButton.tonalIcon(
+                key: const Key('push_test'),
+                onPressed: push.canSendTest && !_sending ? () => _sendTest(push) : null,
+                icon: const Icon(Icons.send_outlined),
+                label: Text(_sending ? 'Đang gửi…' : 'Gửi thử'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
