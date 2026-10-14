@@ -38,7 +38,6 @@ jobs:
 
   apk:
     # Build APK (release, ký bằng debug key) để cài thử; tải ở mục Artifacts của lần chạy.
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     needs: mobile
     runs-on: ubuntu-latest
     defaults:

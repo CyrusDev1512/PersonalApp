@@ -48,10 +48,51 @@ def make_engine(url: str) -> Engine:
     return create_engine(url)
 
 
+def _sql_default(column) -> str:
+    """Giá trị mặc định dạng SQL cho cột mới thêm vào bảng đã có dữ liệu."""
+    default = column.default.arg if column.default is not None and not callable(column.default.arg) else None
+    if default is None:
+        if column.nullable:
+            return "NULL"
+        type_name = type(column.type).__name__.lower()
+        default = 0 if ("bool" in type_name or "int" in type_name) else ""
+    if isinstance(default, bool):
+        return "1" if default else "0"
+    if isinstance(default, int | float):
+        return str(default)
+    return "'" + str(default).replace("'", "''") + "'"
+
+
+def auto_migrate(engine: Engine) -> list[str]:
+    """SQLite: thêm các cột có trong model mà bảng cũ chưa có (create_all không tự làm việc này)."""
+    if engine.dialect.name != "sqlite":
+        return []
+    added: list[str] = []
+    with engine.begin() as conn:
+        for table in SQLModel.metadata.sorted_tables:
+            existing = {row[1] for row in conn.exec_driver_sql(f'PRAGMA table_info("{table.name}")')}
+            if not existing:
+                continue
+            for column in table.columns:
+                if column.name in existing:
+                    continue
+                col_type = column.type.compile(dialect=engine.dialect)
+                if not column.nullable:
+                    extra = f" NOT NULL DEFAULT {_sql_default(column)}"
+                elif column.default is not None:
+                    extra = f" DEFAULT {_sql_default(column)}"
+                else:
+                    extra = ""
+                conn.exec_driver_sql(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {col_type}{extra}')
+                added.append(f"{table.name}.{column.name}")
+    return added
+
+
 def init_engine(url: str) -> Engine:
     global _engine
     _engine = make_engine(url)
     SQLModel.metadata.create_all(_engine)
+    auto_migrate(_engine)
     from app.seed import seed_defaults
 
     with Session(_engine) as s:
