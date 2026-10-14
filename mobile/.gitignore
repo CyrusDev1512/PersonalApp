@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Firebase: file cấu hình thật của từng người (tải từ Firebase console), không commit.
+# CI dùng android/ci/google-services.dummy.json (id giả).
+/android/app/google-services.json

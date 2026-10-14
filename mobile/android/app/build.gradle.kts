@@ -4,6 +4,15 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Thông báo đẩy (Firebase Cloud Messaging): chỉ bật plugin google-services khi có
+// android/app/google-services.json (tải từ Firebase console, không commit). Không có file thì
+// app vẫn build và chạy bình thường, chỉ tắt thông báo đẩy.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.lifecycle("Không có android/app/google-services.json: build không kèm Firebase, thông báo đẩy tắt (xem README).")
+}
+
 android {
     namespace = "com.personalapp.personal_finance"
     compileSdk = flutter.compileSdkVersion

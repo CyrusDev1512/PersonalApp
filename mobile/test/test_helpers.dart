@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:personal_finance/push/push_service.dart';
 
 /// Ví dụ Summary đúng như docs/api.md (mức WARNING).
 Map<String, dynamic> warningSummaryJson() => {
@@ -162,4 +164,119 @@ class FakeServer {
 
   Iterable<RecordedRequest> where(String method, String path) =>
       requests.where((r) => r.method == method && r.url.path == path);
+}
+
+/// Dự báo như ví dụ trong docs/api.md (chạm mức sàn ngày 25/10, còn 11 ngày).
+Map<String, dynamic> forecastJson({
+  String status = 'ok',
+  String confidence = 'normal',
+  String? floorHitDate = '2026-10-25',
+  int? daysUntilFloorHit = 11,
+  String? headline = 'Chi như hiện tại thì khoảng ngày 25/10 sẽ chạm mức sàn',
+  int observedDays = 14,
+}) => {
+  'status': status,
+  'confidence': confidence,
+  'reason': null,
+  'observed_days': observedDays,
+  'window_days': 14,
+  'daily_spend': 180000,
+  'capped_amount': 4000000,
+  'capped_count': 1,
+  'projected_free_end': -350000,
+  'projected_budget_overrun': 1000000,
+  'income_pending': 0,
+  'floor_hit_date': floorHitDate,
+  'days_until_floor_hit': daysUntilFloorHit,
+  'recovers_on': null,
+  'safe_daily_spend': 120000,
+  'headline': headline,
+  'details': [
+    'Tốc độ chi ngoài mục tiêu: ~180.000đ/ngày (14 ngày gần nhất)',
+    'Gợi ý: chi ngoài mục tiêu tối đa ~120.000đ/ngày để giữ trên mức sàn',
+  ],
+  'budgets': [
+    {
+      'goal_id': 2,
+      'name': 'Tiền ăn',
+      'category_icon': '🍜',
+      'spent': 2600000,
+      'amount': 5000000,
+      'daily_rate': 200000,
+      'projected_spent': 6000000,
+      'projected_pct': 120.0,
+      'status': 'over_pace',
+      'suggested_daily': 133333,
+    },
+    {
+      'goal_id': 3,
+      'name': 'Cà phê',
+      'category_icon': '☕',
+      'spent': 300000,
+      'amount': 1000000,
+      'daily_rate': 20000,
+      'projected_spent': 650000,
+      'projected_pct': 65.0,
+      'status': 'on_track',
+      'suggested_daily': 40000,
+    },
+  ],
+};
+
+/// [PushService] giả: điều khiển được token, quyền và các luồng thông báo trong test.
+class FakePushService implements PushService {
+  FakePushService({this.token = 'fcm:token-1', this.permission = PushPermission.granted, this.initOk = true});
+
+  String? token;
+  PushPermission permission;
+  bool initOk;
+
+  int initCalls = 0;
+  int permissionCalls = 0;
+  int deleteTokenCalls = 0;
+  bool _available = false;
+
+  final StreamController<String> tokenRefresh = StreamController<String>.broadcast();
+  final StreamController<PushMessage> foreground = StreamController<PushMessage>.broadcast();
+  final StreamController<PushMessage> opened = StreamController<PushMessage>.broadcast();
+
+  @override
+  bool get available => _available;
+
+  @override
+  Future<bool> init() async {
+    initCalls++;
+    _available = initOk;
+    return initOk;
+  }
+
+  @override
+  Future<PushPermission> requestPermission() async {
+    permissionCalls++;
+    return permission;
+  }
+
+  @override
+  Future<String?> getToken() async => token;
+
+  @override
+  Stream<String> get onTokenRefresh => tokenRefresh.stream;
+
+  @override
+  Stream<PushMessage> get onForeground => foreground.stream;
+
+  @override
+  Stream<PushMessage> get onOpened => opened.stream;
+
+  @override
+  Future<void> deleteToken() async {
+    deleteTokenCalls++;
+    token = null;
+  }
+
+  Future<void> close() async {
+    await tokenRefresh.close();
+    await foreground.close();
+    await opened.close();
+  }
 }
