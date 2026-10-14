@@ -183,7 +183,7 @@ class Forecast {
   bool get isUnavailable => status == ForecastStatus.unavailable;
   bool get isLowConfidence => confidence == 'low';
 
-  /// Ngân sách sắp vượt / đã vượt (hiện trên thẻ).
+  /// Ngân sách sắp vượt / đã vượt.
   List<BudgetPace> get budgetsNeedingAttention => budgets.where((b) => b.needsAttention).toList();
 
   /// Có gì để hiện không (ẩn khi `unavailable` hoặc trạng thái lạ không kèm nội dung).

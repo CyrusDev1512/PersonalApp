@@ -8,6 +8,8 @@ import 'package:personal_finance/push/push_service.dart';
 import 'package:personal_finance/screens/connect_screen.dart';
 import 'package:personal_finance/screens/tx_action_sheet.dart';
 import 'package:personal_finance/state/app_state.dart';
+import 'package:personal_finance/state/push_controller.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_helpers.dart';
@@ -98,6 +100,23 @@ FakeServer _server({bool pushEnabled = true, Map<String, Object? Function(Record
       ...extra,
     });
 
+/// `POST /api/devices` trả lần lượt các mã [statuses] (≥ 300 là lỗi), hết danh sách thì 201.
+Object? Function(RecordedRequest req) _flakyRegister(List<int> statuses) {
+  var calls = 0;
+  return (req) {
+    final code = calls < statuses.length ? statuses[calls] : 201;
+    calls++;
+    if (code >= 300) return jsonResponse({'detail': 'Service Unavailable'}, code);
+    return jsonResponse({
+      'id': 3,
+      'platform': 'android',
+      'app_version': '1.0.0',
+      'last_seen_at': '2026-10-14T03:00:00Z',
+      'push_enabled': true,
+    }, code);
+  };
+}
+
 void _useTallScreen(WidgetTester tester) {
   tester.view.physicalSize = const Size(1080, 2600);
   tester.view.devicePixelRatio = 1.0;
@@ -105,11 +124,17 @@ void _useTallScreen(WidgetTester tester) {
 }
 
 /// App đã kết nối sẵn máy chủ giả, dùng [push].
-Future<AppState> _pumpConnected(WidgetTester tester, FakeServer server, PushService push) async {
+Future<AppState> _pumpConnected(
+  WidgetTester tester,
+  FakeServer server,
+  PushService push, {
+  DateTime Function()? clock,
+}) async {
   _useTallScreen(tester);
   final state = AppState(
     client: ApiClient(baseUrl: 'https://finance.example.com', token: 'tok', client: server.client),
     refreshInterval: null,
+    clock: clock,
   );
   addTearDown(state.dispose);
   await tester.pumpWidget(PersonalFinanceApp(state: state, refreshInterval: null, push: push));
@@ -125,6 +150,17 @@ FakePushService _fakePush() {
 
 Future<void> _goTab(WidgetTester tester, String label) async {
   await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text(label)));
+  await tester.pumpAndSettle();
+}
+
+PushController _controller(WidgetTester tester) =>
+    Provider.of<PushController>(tester.element(find.byType(NavigationBar)), listen: false);
+
+Future<void> _disconnectFromSettings(WidgetTester tester) async {
+  await _goTab(tester, 'Cài đặt');
+  await tester.tap(find.widgetWithText(TextButton, 'Ngắt kết nối'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(FilledButton, 'Ngắt kết nối'));
   await tester.pumpAndSettle();
 }
 
@@ -390,5 +426,141 @@ void main() {
     expect(push.permissionCalls, 0);
     expect(find.text('Sắp chạm mức mục tiêu'), findsOneWidget);
     expect(server.requests.where((r) => r.url.path.startsWith('/api/devices')), isEmpty);
+  });
+
+  testWidgets('ngắt kết nối khi chưa tải được tổng quan (máy chủ không tới được): vẫn huỷ token cũ', (tester) async {
+    // Phiên trước đã đăng ký thiết bị ở máy chủ này; giờ mở app với kết nối đã lưu nhưng không tới được máy chủ.
+    SharedPreferences.setMockInitialValues({'server_url': 'https://finance.example.com', 'app_token': 'tok'});
+    final server = _server(
+      extra: {
+        'GET /api/summary': (_) => throw http.ClientException('no route'),
+        'DELETE /api/devices/$_encodedToken': (_) => throw http.ClientException('no route'),
+      },
+    );
+    final push = _fakePush();
+    _useTallScreen(tester);
+    await tester.pumpWidget(
+      PersonalFinanceApp(
+        refreshInterval: null,
+        push: push,
+        clientFactory: (url, t) => ApiClient(baseUrl: url, token: t, client: server.client),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(ConnectScreen), findsNothing);
+    expect(server.where('POST', '/api/devices'), isEmpty);
+
+    await _disconnectFromSettings(tester);
+
+    expect(find.byType(ConnectScreen), findsOneWidget);
+    // Thử DELETE token Firebase hiện có ở máy chủ cũ...
+    final delete = server.where('DELETE', '/api/devices/$_encodedToken').single;
+    expect(delete.headers['Authorization'], 'Bearer tok');
+    // ...lỗi cũng vẫn xoá token trên máy để máy chủ cũ chỉ còn token hết hiệu lực.
+    expect(push.initCalls, 1);
+    expect(push.deleteTokenCalls, 1);
+    expect(push.token, isNull);
+  });
+
+  testWidgets('đổi máy chủ khi máy chủ cũ chưa tải được: huỷ ở máy chủ cũ, đổi token, đăng ký ở máy chủ mới', (
+    tester,
+  ) async {
+    final old = _server(extra: {'GET /api/summary': (_) => throw http.ClientException('no route')});
+    final next = _server();
+    final push = _fakePush()..tokenAfterDelete = 'fcm:token-2';
+    var tokenDeletedAfterDelete = false;
+    push.onDeleteToken = () => tokenDeletedAfterDelete = old.where('DELETE', '/api/devices/$_encodedToken').isNotEmpty;
+    final state = await _pumpConnected(tester, old, push);
+    expect(old.where('POST', '/api/devices'), isEmpty);
+
+    await state.connect(ApiClient(baseUrl: 'https://new.example.com', token: 'tok-2', client: next.client));
+    await tester.pumpAndSettle();
+
+    final delete = old.where('DELETE', '/api/devices/$_encodedToken').single;
+    expect(delete.headers['Authorization'], 'Bearer tok');
+    expect(push.deleteTokenCalls, 1);
+    expect(tokenDeletedAfterDelete, isTrue);
+    final post = next.where('POST', '/api/devices').single;
+    expect((post.json as Map)['token'], 'fcm:token-2');
+    expect(post.headers['Authorization'], 'Bearer tok-2');
+    expect(next.requests.where((r) => r.method == 'DELETE'), isEmpty);
+    expect(_controller(tester).status, PushStatus.enabled);
+    expect(_controller(tester).registeredToken, 'fcm:token-2');
+  });
+
+  testWidgets('ngắt kết nối với NoopPushService: không gọi API thiết bị, không lỗi', (tester) async {
+    final server = _server();
+    await _pumpConnected(tester, server, const NoopPushService());
+
+    await _disconnectFromSettings(tester);
+
+    expect(find.byType(ConnectScreen), findsOneWidget);
+    expect(server.requests.where((r) => r.url.path.startsWith('/api/devices')), isEmpty);
+  });
+
+  testWidgets('đăng ký lỗi (503): lần tải tổng quan thành công sau ≥ 2 phút thì đăng ký lại', (tester) async {
+    var now = DateTime(2026, 10, 14, 10);
+    final server = _server(
+      extra: {
+        'POST /api/devices': _flakyRegister([503]),
+      },
+    );
+    final push = _fakePush();
+    final state = await _pumpConnected(tester, server, push, clock: () => now);
+    final controller = _controller(tester);
+    expect(controller.status, PushStatus.error);
+    expect(server.where('POST', '/api/devices'), hasLength(1));
+
+    // Chưa đủ 2 phút: chưa thử lại.
+    now = now.add(const Duration(seconds: 30));
+    await state.load();
+    await tester.pumpAndSettle();
+    expect(server.where('POST', '/api/devices'), hasLength(1));
+    expect(controller.status, PushStatus.error);
+
+    // Mở lại app sau 2 phút → tải tổng quan → đăng ký lại.
+    now = now.add(const Duration(minutes: 2));
+    state.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(server.where('POST', '/api/devices'), hasLength(2));
+    expect(controller.status, PushStatus.enabled);
+    expect(controller.registeredToken, _token);
+
+    // Đã bật: không gửi thêm.
+    now = now.add(const Duration(minutes: 5));
+    await state.load();
+    await tester.pumpAndSettle();
+    expect(server.where('POST', '/api/devices'), hasLength(2));
+  });
+
+  testWidgets('token mới gửi lỗi: giữ lại và gửi lại ở lần tải tổng quan sau ≥ 2 phút', (tester) async {
+    var now = DateTime(2026, 10, 14, 10);
+    final server = _server(
+      extra: {
+        'POST /api/devices': _flakyRegister([201, 503]),
+      },
+    );
+    final push = _fakePush();
+    final state = await _pumpConnected(tester, server, push, clock: () => now);
+    final controller = _controller(tester);
+    expect(controller.status, PushStatus.enabled);
+
+    push.tokenRefresh.add('fcm:token-2');
+    await tester.pumpAndSettle();
+    expect(controller.status, PushStatus.error);
+    expect(controller.registeredToken, _token);
+
+    now = now.add(const Duration(minutes: 1));
+    await state.load();
+    await tester.pumpAndSettle();
+    expect(server.where('POST', '/api/devices'), hasLength(2));
+
+    now = now.add(const Duration(minutes: 2));
+    await state.load();
+    await tester.pumpAndSettle();
+    final tokens = server.where('POST', '/api/devices').map((r) => (r.json as Map)['token']).toList();
+    expect(tokens, [_token, 'fcm:token-2', 'fcm:token-2']);
+    expect(controller.registeredToken, 'fcm:token-2');
+    expect(controller.status, PushStatus.enabled);
   });
 }

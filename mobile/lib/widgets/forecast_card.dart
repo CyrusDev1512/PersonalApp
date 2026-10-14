@@ -85,16 +85,18 @@ class ForecastCard extends StatelessWidget {
     return 'Chi như hiện tại thì cuối tháng vẫn trên mức sàn';
   }
 
+  /// Tiêu đề + các dòng `details` của server giữ nguyên (đã gồm tốc độ chi, gợi ý chi tối đa/ngày, ngân sách
+  /// vượt nhịp, "Ước tính sơ bộ"…); chỉ thêm số liệu không có trong đó: được tiêu cuối tháng (dự kiến).
   List<Widget> _okContent(BuildContext context, Forecast f, Color? color) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final small = theme.textTheme.bodySmall;
+    final headline = f.headline ?? _fallbackHeadline(f);
     final freeEnd = f.projectedFreeEnd;
-    final safeDaily = f.safeDailySpend;
-    final budgets = f.budgetsNeedingAttention;
+    // Tiêu đề server có thể đã nói số này ("…cuối tháng còn khoảng 800.000đ được tiêu").
+    final showFreeEnd = freeEnd != null && !headline.contains(formatVnd(freeEnd));
     return [
       Text(
-        f.headline ?? _fallbackHeadline(f),
+        headline,
         key: const Key('forecast_headline'),
         style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: color),
       ),
@@ -103,31 +105,13 @@ class ForecastCard extends StatelessWidget {
           padding: const EdgeInsets.only(top: 4),
           child: Text(line, style: small),
         ),
-      if (safeDaily != null || freeEnd != null) const SizedBox(height: 8),
-      if (safeDaily != null)
-        _Fact(
-          key: const Key('forecast_safe_daily'),
-          icon: Icons.savings_outlined,
-          text: 'Nên chi tối đa ~${formatVnd(safeDaily)}/ngày',
-        ),
-      if (freeEnd != null)
+      if (showFreeEnd) ...[
+        const SizedBox(height: 8),
         _Fact(
           key: const Key('forecast_free_end'),
           icon: Icons.event_outlined,
           text: 'Được tiêu cuối tháng (dự kiến): ${formatVnd(freeEnd)}',
           color: freeEnd < 0 ? Colors.red.shade700 : null,
-        ),
-      if (budgets.isNotEmpty) ...[
-        const SizedBox(height: 8),
-        Text('Ngân sách vượt nhịp', style: theme.textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant)),
-        for (final b in budgets) _BudgetLine(budget: b),
-      ],
-      if (f.isLowConfidence) ...[
-        const SizedBox(height: 8),
-        Text(
-          'Ước tính sơ bộ (mới có ${f.observedDays} ngày dữ liệu)',
-          key: const Key('forecast_low_confidence'),
-          style: small?.copyWith(fontStyle: FontStyle.italic, color: scheme.onSurfaceVariant),
         ),
       ],
     ];
@@ -174,51 +158,6 @@ class _Fact extends StatelessWidget {
             child: Text(
               text,
               style: theme.textTheme.bodyMedium?.copyWith(color: color, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// "🍜 Tiền ăn: dự kiến 120% · gợi ý ~133.333đ/ngày".
-class _BudgetLine extends StatelessWidget {
-  const _BudgetLine({required this.budget});
-
-  final BudgetPace budget;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final b = budget;
-    final color = b.isExceeded ? Colors.red.shade700 : Colors.amber.shade800;
-    final suggested = b.suggestedDaily;
-    final parts = [
-      if (b.isExceeded) 'đã vượt',
-      'dự kiến ${b.projectedPct.round()}%',
-      if (suggested != null && suggested > 0) 'gợi ý ~${formatVnd(suggested)}/ngày',
-    ];
-    return Padding(
-      key: Key('forecast_budget_${b.goalId ?? b.name}'),
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(b.isExceeded ? Icons.error_outline : Icons.speed, size: 16, color: color),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: b.label,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  TextSpan(text: ': ${parts.join(' · ')}'),
-                ],
-              ),
-              style: theme.textTheme.bodySmall,
             ),
           ),
         ],

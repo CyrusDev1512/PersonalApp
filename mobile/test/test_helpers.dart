@@ -166,7 +166,8 @@ class FakeServer {
       requests.where((r) => r.method == method && r.url.path == path);
 }
 
-/// Dự báo như ví dụ trong docs/api.md (chạm mức sàn ngày 25/10, còn 11 ngày).
+/// Dự báo như ví dụ trong docs/api.md (chạm mức sàn ngày 25/10, còn 11 ngày); `details` đúng như
+/// `backend/app/engine/forecast.py::_details` soạn cho các số này (kể cả dòng ngân sách / "Ước tính sơ bộ").
 Map<String, dynamic> forecastJson({
   String status = 'ok',
   String confidence = 'normal',
@@ -179,7 +180,7 @@ Map<String, dynamic> forecastJson({
   'confidence': confidence,
   'reason': null,
   'observed_days': observedDays,
-  'window_days': 14,
+  'window_days': observedDays < 14 ? observedDays : 14,
   'daily_spend': 180000,
   'capped_amount': 4000000,
   'capped_count': 1,
@@ -192,8 +193,11 @@ Map<String, dynamic> forecastJson({
   'safe_daily_spend': 120000,
   'headline': headline,
   'details': [
-    'Tốc độ chi ngoài mục tiêu: ~180.000đ/ngày (14 ngày gần nhất)',
+    'Tốc độ chi ngoài mục tiêu: ~180.000đ/ngày (${observedDays < 14 ? observedDays : 14} ngày gần nhất)',
+    'Không tính phần vượt của 1 khoản chi lớn (4.000.000đ)',
     'Gợi ý: chi ngoài mục tiêu tối đa ~120.000đ/ngày để giữ trên mức sàn',
+    '🍜 Tiền ăn: với tốc độ này sẽ dùng 120% ngân sách — nên chi tối đa ~133.333đ/ngày',
+    if (confidence == 'low') 'Ước tính sơ bộ: mới có $observedDays ngày dữ liệu',
   ],
   'budgets': [
     {
@@ -233,6 +237,9 @@ class FakePushService implements PushService {
 
   /// Gọi khi [deleteToken] chạy (để kiểm tra thứ tự so với request DELETE).
   void Function()? onDeleteToken;
+
+  /// Token Firebase cấp sau [deleteToken] (FCM tạo token mới ở lần [getToken] sau); `null` = không có.
+  String? tokenAfterDelete;
 
   int initCalls = 0;
   int permissionCalls = 0;
@@ -275,7 +282,7 @@ class FakePushService implements PushService {
   Future<void> deleteToken() async {
     onDeleteToken?.call();
     deleteTokenCalls++;
-    token = null;
+    token = tokenAfterDelete;
   }
 
   Future<void> close() async {

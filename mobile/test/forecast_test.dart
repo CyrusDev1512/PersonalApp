@@ -26,6 +26,52 @@ Future<void> _pumpCard(WidgetTester tester, Forecast? forecast, {String month = 
 Color? _headlineColor(WidgetTester tester) =>
     tester.widget<Text>(find.byKey(const Key('forecast_headline'))).style?.color;
 
+/// Số dòng chữ trên màn hình có chứa [needle] (để bắt nội dung bị lặp).
+int _linesContaining(WidgetTester tester, String needle) => tester
+    .widgetList<Text>(find.byType(Text))
+    .where((t) => (t.data ?? t.textSpan?.toPlainText() ?? '').contains(needle))
+    .length;
+
+/// `forecast_dict()` thật của backend (độ tin cậy thấp, một ngân sách vượt nhịp).
+const _realBackendForecast = <String, dynamic>{
+  'status': 'ok',
+  'confidence': 'low',
+  'reason': null,
+  'observed_days': 5,
+  'window_days': 5,
+  'daily_spend': 514286,
+  'capped_amount': 0,
+  'capped_count': 0,
+  'projected_free_end': -10661751,
+  'projected_budget_overrun': 4790322,
+  'income_pending': 0,
+  'floor_hit_date': '2026-10-17',
+  'days_until_floor_hit': 12,
+  'recovers_on': null,
+  'safe_daily_spend': 100358,
+  'headline': 'Chi như hiện tại thì khoảng ngày 17/10 sẽ chạm mức sàn',
+  'details': [
+    'Tốc độ chi ngoài mục tiêu: ~514.286đ/ngày (ước tính theo tháng trước)',
+    'Gợi ý: chi ngoài mục tiêu tối đa ~100.358đ/ngày để giữ trên mức sàn',
+    '🍜 Tiền ăn uống hằng ngày của cả gia đình: với tốc độ này sẽ dùng 260% ngân sách — nên chi tối đa ~55.555đ/ngày',
+    'Ước tính sơ bộ: mới có 5 ngày dữ liệu',
+  ],
+  'budgets': [
+    {
+      'goal_id': 2,
+      'name': 'Tiền ăn uống hằng ngày của cả gia đình',
+      'category_icon': '🍜',
+      'spent': 1500000,
+      'amount': 3000000,
+      'daily_rate': 241935,
+      'projected_spent': 7790323,
+      'projected_pct': 259.7,
+      'status': 'over_pace',
+      'suggested_daily': 55555,
+    },
+  ],
+};
+
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('vi_VN');
@@ -50,7 +96,7 @@ void main() {
       expect(f.recoversOn, isNull);
       expect(f.safeDailySpend, 120000);
       expect(f.headline, 'Chi như hiện tại thì khoảng ngày 25/10 sẽ chạm mức sàn');
-      expect(f.details, hasLength(2));
+      expect(f.details, hasLength(4));
       expect(f.budgets, hasLength(2));
       final food = f.budgets.first;
       expect(food.goalId, 2);
@@ -129,24 +175,42 @@ void main() {
       expect(_headlineColor(tester), Colors.red.shade700);
     });
 
-    testWidgets('chạm mức sàn trong tháng: tiêu đề hổ phách + chi tiết, gợi ý, ngân sách vượt nhịp', (tester) async {
-      await _pumpCard(tester, Forecast.fromJson(forecastJson()));
+    testWidgets('chạm mức sàn trong tháng: tiêu đề hổ phách + đúng các dòng chi tiết của server, không lặp', (
+      tester,
+    ) async {
+      final json = forecastJson();
+      await _pumpCard(tester, Forecast.fromJson(json));
       expect(_headlineColor(tester), Colors.amber.shade800);
       expect(find.text('Chi như hiện tại thì khoảng ngày 25/10 sẽ chạm mức sàn'), findsOneWidget);
-      expect(find.text('Tốc độ chi ngoài mục tiêu: ~180.000đ/ngày (14 ngày gần nhất)'), findsOneWidget);
-      expect(find.text('Nên chi tối đa ~120.000đ/ngày'), findsOneWidget);
+      for (final line in json['details'] as List<String>) {
+        expect(find.text(line), findsOneWidget);
+      }
+      // Gợi ý chi/ngày và ngân sách vượt nhịp đã có trong `details`: không hiện thêm lần nữa.
+      expect(_linesContaining(tester, '120.000đ'), 1);
+      expect(_linesContaining(tester, 'Tiền ăn'), 1);
+      expect(_linesContaining(tester, '133.333đ'), 1);
+      expect(find.textContaining('Cà phê'), findsNothing);
+      // Chỉ thêm số liệu không có trong `details`.
       expect(find.text('Được tiêu cuối tháng (dự kiến): -350.000đ'), findsOneWidget);
-      // Chỉ ngân sách over_pace/exceeded.
-      expect(find.text('Ngân sách vượt nhịp'), findsOneWidget);
-      expect(
-        find.textContaining('🍜 Tiền ăn: dự kiến 120% · gợi ý ~133.333đ/ngày', findRichText: true),
-        findsOneWidget,
-      );
-      expect(find.textContaining('Cà phê', findRichText: true), findsNothing);
       expect(find.textContaining('Ước tính sơ bộ'), findsNothing);
     });
 
-    testWidgets('không chạm mức sàn: màu thường; ít dữ liệu thì ghi "Ước tính sơ bộ"', (tester) async {
+    testWidgets('dữ liệu thật của backend: mỗi ý chỉ hiện một lần', (tester) async {
+      tester.view.physicalSize = const Size(360, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await _pumpCard(tester, Forecast.fromJson(_realBackendForecast));
+      expect(tester.takeException(), isNull);
+      for (final line in _realBackendForecast['details'] as List<String>) {
+        expect(find.text(line), findsOneWidget);
+      }
+      expect(_linesContaining(tester, '100.358đ'), 1);
+      expect(_linesContaining(tester, 'Tiền ăn uống'), 1);
+      expect(_linesContaining(tester, 'Ước tính sơ bộ'), 1);
+      expect(find.text('Được tiêu cuối tháng (dự kiến): -10.661.751đ'), findsOneWidget);
+    });
+
+    testWidgets('không chạm mức sàn: màu thường; ít dữ liệu thì có dòng "Ước tính sơ bộ" của server', (tester) async {
       await _pumpCard(
         tester,
         Forecast.fromJson({
@@ -155,18 +219,31 @@ void main() {
             daysUntilFloorHit: null,
             confidence: 'low',
             observedDays: 4,
-            headline: 'Chi như hiện tại thì cuối tháng vẫn trên mức sàn',
+            headline: 'Chi như hiện tại, cuối tháng còn khoảng 800.000đ được tiêu',
           ),
-          'budgets': <Object>[],
           'projected_free_end': 800000,
         }),
       );
       final color = _headlineColor(tester);
       expect(color, isNot(Colors.red.shade700));
       expect(color, isNot(Colors.amber.shade800));
+      expect(find.text('Chi như hiện tại, cuối tháng còn khoảng 800.000đ được tiêu'), findsOneWidget);
+      expect(find.text('Ước tính sơ bộ: mới có 4 ngày dữ liệu'), findsOneWidget);
+      expect(_linesContaining(tester, 'Ước tính sơ bộ'), 1);
+      // Tiêu đề đã nói số được tiêu cuối tháng.
+      expect(find.byKey(const Key('forecast_free_end')), findsNothing);
+      expect(_linesContaining(tester, '800.000đ'), 1);
+    });
+
+    testWidgets('server không gửi headline: tiêu đề dự phòng + được tiêu cuối tháng', (tester) async {
+      await _pumpCard(
+        tester,
+        Forecast.fromJson({
+          ...forecastJson(floorHitDate: null, daysUntilFloorHit: null, headline: null),
+          'projected_free_end': 800000,
+        }),
+      );
       expect(find.text('Chi như hiện tại thì cuối tháng vẫn trên mức sàn'), findsOneWidget);
-      expect(find.text('Ước tính sơ bộ (mới có 4 ngày dữ liệu)'), findsOneWidget);
-      expect(find.text('Ngân sách vượt nhịp'), findsNothing);
       expect(find.text('Được tiêu cuối tháng (dự kiến): 800.000đ'), findsOneWidget);
     });
 
@@ -182,7 +259,7 @@ void main() {
       expect(find.byKey(const Key('forecast_card')), findsOneWidget);
       expect(find.text('Chưa đủ dữ liệu để dự báo (cần ~3 ngày)'), findsOneWidget);
       expect(find.text('Mới có 1 ngày dữ liệu'), findsOneWidget);
-      expect(find.textContaining('Nên chi tối đa'), findsNothing);
+      expect(find.byKey(const Key('forecast_free_end')), findsNothing);
       final muted = Theme.of(tester.element(find.byKey(const Key('forecast_headline')))).colorScheme.onSurfaceVariant;
       expect(_headlineColor(tester), muted);
     });
@@ -225,7 +302,7 @@ void main() {
       final rect = tester.getRect(card);
       expect(rect.top, greaterThan(banner.bottom));
       expect(rect.top - banner.bottom, lessThan(20));
-      expect(find.text('Nên chi tối đa ~120.000đ/ngày'), findsOneWidget);
+      expect(find.text('Gợi ý: chi ngoài mục tiêu tối đa ~120.000đ/ngày để giữ trên mức sàn'), findsOneWidget);
     });
 
     testWidgets('không có forecast (tháng cũ) thì không có thẻ', (tester) async {

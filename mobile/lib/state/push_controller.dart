@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' hide Summary;
 
 import '../api/api_client.dart';
 import '../models/models.dart';
@@ -51,13 +51,19 @@ String _defaultPlatform() => defaultTargetPlatform == TargetPlatform.iOS ? 'ios'
 /// - Sau khi kết nối máy chủ thành công (tải được tổng quan): khởi tạo push → xin quyền
 ///   (Android 13+) → lấy token → `POST /api/devices`.
 /// - Token đổi → đăng ký lại.
-/// - Ngắt kết nối → `DELETE /api/devices/{token}` rồi xoá token trên máy;
-///   đổi máy chủ → huỷ ở máy chủ cũ, đăng ký ở máy chủ mới.
+/// - Đăng ký lỗi (vd. 503 thoáng qua, token mới gửi không được) → thử lại khi tải tổng quan thành công
+///   (tự làm mới, mở lại app), cách lần thử trước ít nhất [retryInterval].
+/// - Ngắt kết nối / đổi máy chủ (kể cả khi chưa tải được tổng quan lần nào) → `DELETE /api/devices/{token}`
+///   ở máy chủ cũ (lỗi thì bỏ qua) rồi xoá token trên máy; đổi máy chủ thì đăng ký token mới ở máy chủ mới.
 ///
 /// Các thao tác chạy tuần tự (hàng đợi) để không lẫn thứ tự đăng ký / huỷ.
 class PushController extends ChangeNotifier {
-  PushController({required this.service, String? platform, this.appVersion = kAppVersion})
-    : platform = platform ?? _defaultPlatform();
+  PushController({
+    required this.service,
+    String? platform,
+    this.appVersion = kAppVersion,
+    this.retryInterval = const Duration(minutes: 2),
+  }) : platform = platform ?? _defaultPlatform();
 
   final PushService service;
 
@@ -65,11 +71,24 @@ class PushController extends ChangeNotifier {
   final String platform;
   final String appVersion;
 
+  /// Khoảng cách tối thiểu giữa hai lần tự thử đăng ký lại sau lỗi.
+  final Duration retryInterval;
+
   PushStatus _status = PushStatus.idle;
   String? _errorMessage;
   String? _serverError;
   String? _token;
+
+  /// Token mới (onTokenRefresh) chưa gửi được lên máy chủ: thử gửi lại.
+  String? _pendingToken;
   ApiClient? _client;
+
+  /// [AppState.client] ở lần [_sync] trước (kể cả khi chưa xác nhận), để biết khi ngắt kết nối / đổi máy chủ.
+  ApiClient? _seenClient;
+
+  /// [AppState.summary] ở lần [_sync] trước: đổi nghĩa là vừa tải được tổng quan.
+  Summary? _seenSummary;
+  DateTime? _lastAttempt;
   AppState? _state;
   Future<bool>? _init;
   final List<StreamSubscription<Object?>> _subscriptions = [];
@@ -113,19 +132,37 @@ class PushController extends ChangeNotifier {
     final state = _state;
     if (state == null || _disposed) return;
     final current = state.client;
-    final attached = _client;
-    if (attached != null && !identical(attached, current)) {
-      // Ngắt kết nối hoặc đổi máy chủ.
+    final previous = _seenClient;
+    _seenClient = current;
+    if (previous != null && !identical(previous, current)) {
+      // Ngắt kết nối hoặc đổi máy chủ, kể cả khi phiên này chưa tải được tổng quan lần nào
+      // (thiết bị có thể vẫn đang đăng ký ở máy chủ cũ từ phiên trước).
       _client = null;
-      final loggedOut = current == null;
-      _enqueue(() => _unregister(attached, deleteLocalToken: loggedOut));
+      _enqueue(() => _logout(previous));
     }
     final confirmed = state.confirmedClient;
-    if (confirmed != null && _client == null) {
+    final summary = state.summary;
+    final loaded = summary != null && !identical(summary, _seenSummary);
+    _seenSummary = summary;
+    if (confirmed == null) return;
+    if (_client == null) {
       _client = confirmed;
       _enqueue(() => _register(confirmed));
+    } else if (identical(_client, confirmed) && loaded && _needsRetry && _retryDue(state.now())) {
+      // Vẫn máy chủ đó, vừa tải được tổng quan nhưng lần đăng ký trước lỗi: thử lại.
+      _lastAttempt = state.now();
+      _enqueue(() => _retryRegistration(confirmed));
     }
   }
+
+  bool get _needsRetry => _status == PushStatus.error || _pendingToken != null;
+
+  bool _retryDue(DateTime now) {
+    final last = _lastAttempt;
+    return last == null || now.difference(last) >= retryInterval;
+  }
+
+  DateTime _now() => _state?.now() ?? DateTime.now();
 
   /// Thử đăng ký lại (nút "Thử lại" ở Cài đặt, vd. sau khi bật quyền thông báo).
   Future<void> retry() {
@@ -200,6 +237,7 @@ class PushController extends ChangeNotifier {
 
   Future<void> _register(ApiClient client) async {
     if (!identical(_client, client)) return;
+    _lastAttempt = _now();
     _setStatus(PushStatus.checking);
     if (!await _ensureInit()) {
       if (identical(_client, client)) _setStatus(PushStatus.notAvailableInBuild);
@@ -230,6 +268,7 @@ class PushController extends ChangeNotifier {
     final registration = await client.registerDevice(token: token, platform: platform, appVersion: appVersion);
     // Đã có trên máy chủ: phải huỷ khi ngắt kết nối (kể cả khi vừa đổi máy chủ trong lúc chờ).
     _token = token;
+    _pendingToken = null;
     if (!identical(_client, client)) return;
     bool enabled;
     String? serverError;
@@ -251,30 +290,57 @@ class PushController extends ChangeNotifier {
     _setStatus(enabled ? PushStatus.enabled : PushStatus.serverNotConfigured);
   }
 
-  void _onTokenRefresh(String token) {
-    _enqueue(() async {
-      final client = _client;
-      if (client == null || token.isEmpty || token == _token) return;
-      if (_status == PushStatus.permissionDenied || _status == PushStatus.notAvailableInBuild) return;
-      try {
-        await _sendToken(client, token);
-      } on ApiException catch (e) {
-        if (identical(_client, client)) _setError(e.message);
-      }
-    });
+  void _onTokenRefresh(String token) => _enqueue(() => _sendRefreshed(token));
+
+  /// Gửi token mới; lỗi thì giữ ở [_pendingToken] để [_sync] thử lại.
+  Future<void> _sendRefreshed(String token) async {
+    final client = _client;
+    if (client == null || token.isEmpty || token == _token) return;
+    if (_status == PushStatus.permissionDenied || _status == PushStatus.notAvailableInBuild) return;
+    _pendingToken = token;
+    _lastAttempt = _now();
+    try {
+      await _sendToken(client, token);
+    } on ApiException catch (e) {
+      if (identical(_client, client)) _setError(e.message);
+    }
   }
 
-  Future<void> _unregister(ApiClient client, {required bool deleteLocalToken}) async {
-    final token = _token;
+  Future<void> _retryRegistration(ApiClient client) async {
+    if (!identical(_client, client)) return;
+    final pending = _pendingToken;
+    if (pending != null) {
+      await _sendRefreshed(pending);
+    } else {
+      await _register(client);
+    }
+  }
+
+  /// Huỷ đăng ký ở máy chủ cũ [client] rồi xoá token trên máy: nếu máy chủ cũ không nhận được DELETE
+  /// (vd. không tới được) thì token nó giữ cũng hết hiệu lực. Bản build không có push thì chỉ gửi DELETE
+  /// cho token đã đăng ký trong phiên này (nếu có).
+  Future<void> _logout(ApiClient client) async {
+    final known = _token;
     _token = null;
-    if (token != null) {
+    _pendingToken = null;
+    final available = await _ensureInit();
+    var token = known;
+    if (token == null && available) {
+      // Token có thể đã được đăng ký ở phiên trước.
+      try {
+        token = await service.getToken();
+      } catch (e) {
+        debugPrint('Không đọc được token thông báo đẩy: $e');
+      }
+    }
+    if (token != null && token.isNotEmpty) {
       try {
         await client.unregisterDevice(token);
       } catch (e) {
         debugPrint('Không huỷ được đăng ký thiết bị: $e');
       }
     }
-    if (deleteLocalToken && service.available) {
+    if (available) {
       try {
         await service.deleteToken();
       } catch (e) {
