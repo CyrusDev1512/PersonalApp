@@ -39,10 +39,10 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
   int? _categoryId;
   late String _thisMonth;
   late String _month;
+  late bool _repeat;
 
   /// Mục tiêu tháng này (để báo khi mục tiêu tháng sau nhập vào một chuỗi lặp lại sẵn có).
   List<GoalView> _thisMonthGoals = const [];
-  late bool _repeat;
 
   List<Category>? _categories;
   String? _categoriesError;
