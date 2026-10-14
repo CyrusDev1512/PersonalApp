@@ -372,4 +372,95 @@ void main() {
       expect(server.requests.single.url.toString(), 'https://example.com/finance/api/goals?month=2026-10');
     });
   });
+
+  group('thông báo đẩy + deep link', () {
+    test('registerDevice gửi token/platform/app_version, đọc push_enabled', () async {
+      final server = FakeServer({
+        'POST /api/devices': (req) => jsonResponse({
+          'id': 3,
+          'platform': 'android',
+          'app_version': '1.0.0',
+          'last_seen_at': '2026-10-14T03:00:00Z',
+          'push_enabled': false,
+        }, 201),
+      });
+      final reg = await clientFor(server)
+          .registerDevice(token: 'abc:DEF-123_x', platform: 'android', appVersion: '1.0.0');
+      final req = server.requests.single;
+      expect(req.json, {'token': 'abc:DEF-123_x', 'platform': 'android', 'app_version': '1.0.0'});
+      expect(req.headers['Content-Type'], startsWith('application/json'));
+      expect(reg.id, 3);
+      expect(reg.pushEnabled, isFalse);
+      expect(reg.lastSeenAt, DateTime.utc(2026, 10, 14, 3).toLocal());
+    });
+
+    test('unregisterDevice URL-encode token trong path; 204 rỗng không lỗi', () async {
+      final server = FakeServer({'DELETE /api/devices/abc%3ADEF-123_x%2F%2B': (_) => http.Response('', 204)});
+      await clientFor(server).unregisterDevice('abc:DEF-123_x/+');
+      expect(server.requests.single.url.toString(), 'https://finance.example.com/api/devices/abc%3ADEF-123_x%2F%2B');
+    });
+
+    test('listDevices + sendTestPush', () async {
+      final server = FakeServer({
+        'GET /api/devices': (_) => {
+          'push_enabled': false,
+          'error': 'Chưa đặt FCM_SERVICE_ACCOUNT_FILE',
+          'devices': [
+            {
+              'id': 3,
+              'platform': 'android',
+              'app_version': '1.0.0',
+              'created_at': '2026-10-14T03:00:00Z',
+              'last_seen_at': '2026-10-14T03:00:00Z',
+              'last_error': null,
+            },
+          ],
+        },
+        'POST /api/devices/test': (_) => jsonResponse({'queued': true, 'push_enabled': true}, 202),
+      });
+      final list = await clientFor(server).listDevices();
+      expect(list.pushEnabled, isFalse);
+      expect(list.error, 'Chưa đặt FCM_SERVICE_ACCOUNT_FILE');
+      expect(list.devices.single.platform, 'android');
+      final result = await clientFor(server).sendTestPush();
+      expect(result.queued, isTrue);
+      expect(result.pushEnabled, isTrue);
+      expect(server.where('POST', '/api/devices/test').single.body, isEmpty);
+    });
+
+    test('getTransaction / getAlert', () async {
+      final server = FakeServer({
+        'GET /api/transactions/55': (_) => {
+          'id': 55,
+          'direction': 'out',
+          'amount': 3500000,
+          'description': 'RUT TIEN ATM',
+          'bank_time': '2026-10-14T02:59:00Z',
+          'status': 'active',
+        },
+        'GET /api/alerts/10': (_) => {
+          'id': 10,
+          'created_at': '2026-10-14T02:59:05Z',
+          'kind': 'forecast',
+          'level': 'WARNING',
+          'title': '📈 Dự báo',
+          'message': 'Chi như hiện tại thì khoảng ngày 25/10 sẽ chạm mức sàn',
+          'read': false,
+          'transaction_id': null,
+          'goal_id': null,
+        },
+      });
+      final tx = await clientFor(server).getTransaction(55);
+      expect(tx.id, 55);
+      expect(tx.title, 'RUT TIEN ATM');
+      final alert = await clientFor(server).getAlert(10);
+      expect(alert.kind, 'forecast');
+      expect(alert.transactionId, isNull);
+
+      await expectLater(
+        clientFor(server).getTransaction(99),
+        throwsA(isA<ApiException>().having((e) => e.statusCode, 'statusCode', 404)),
+      );
+    });
+  });
 }

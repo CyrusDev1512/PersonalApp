@@ -439,8 +439,7 @@ class _PushSectionState extends State<_PushSection> {
     PushStatus.notAvailableInBuild =>
       'Bản build này chưa có Firebase — xem README (mục "Thông báo đẩy"). '
           'Cảnh báo vẫn có ở tab Cảnh báo và Telegram.',
-    PushStatus.permissionDenied =>
-      'Bật quyền thông báo cho "Chi tiêu" trong Cài đặt của điện thoại rồi bấm "Thử lại".',
+    PushStatus.permissionDenied => 'Bật quyền thông báo cho "Chi tiêu" trong Cài đặt của điện thoại rồi bấm "Thử lại".',
     PushStatus.serverNotConfigured => [
       'Máy chủ chưa cấu hình Firebase (service account FCM) — xem README.',
       ?push.serverError,

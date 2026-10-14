@@ -322,9 +322,7 @@ void main() {
     expect(find.text('Thông báo đẩy'), findsOneWidget);
     expect(find.descendant(of: status, matching: find.textContaining('chưa cấu hình')), findsOneWidget);
     expect(find.textContaining('Bản build này chưa có Firebase — xem README'), findsOneWidget);
-    final button = tester.widget<ButtonStyleButton>(
-      find.descendant(of: find.byKey(const Key('push_test')), matching: find.byWidgetPredicate((w) => w is ButtonStyleButton)),
-    );
+    final button = tester.widget<ButtonStyleButton>(find.byKey(const Key('push_test')));
     expect(button.onPressed, isNull);
     expect(server.requests.where((r) => r.url.path.startsWith('/api/devices')), isEmpty);
   });

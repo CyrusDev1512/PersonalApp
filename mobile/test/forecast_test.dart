@@ -15,7 +15,9 @@ Future<void> _pumpCard(WidgetTester tester, Forecast? forecast, {String month = 
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
-        body: SingleChildScrollView(child: ForecastCard(forecast: forecast, month: month)),
+        body: SingleChildScrollView(
+          child: ForecastCard(forecast: forecast, month: month),
+        ),
       ),
     ),
   );

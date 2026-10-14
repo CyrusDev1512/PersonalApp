@@ -83,7 +83,8 @@ class BudgetPace {
   bool get needsAttention => isOverPace || isExceeded;
 
   /// "🍜 Tiền ăn".
-  String get label => [if (categoryIcon != null && categoryIcon!.trim().isNotEmpty) categoryIcon!.trim(), name].join(' ');
+  String get label =>
+      [if (categoryIcon != null && categoryIcon!.trim().isNotEmpty) categoryIcon!.trim(), name].join(' ');
 
   factory BudgetPace.fromJson(JsonMap json) => BudgetPace(
     goalId: asIntOrNull(json['goal_id']),

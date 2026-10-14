@@ -98,7 +98,11 @@ class ForecastCard extends StatelessWidget {
         key: const Key('forecast_headline'),
         style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: color),
       ),
-      for (final line in f.details) Padding(padding: const EdgeInsets.only(top: 4), child: Text(line, style: small)),
+      for (final line in f.details)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(line, style: small),
+        ),
       if (safeDaily != null || freeEnd != null) const SizedBox(height: 8),
       if (safeDaily != null)
         _Fact(
@@ -135,7 +139,11 @@ class ForecastCard extends StatelessWidget {
     final main = f.headline ?? f.reason ?? 'Chưa đủ dữ liệu để dự báo cuối tháng.';
     final reason = f.reason;
     return [
-      Text(main, key: const Key('forecast_headline'), style: theme.textTheme.bodyMedium?.copyWith(color: muted)),
+      Text(
+        main,
+        key: const Key('forecast_headline'),
+        style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+      ),
       if (reason != null && reason != main)
         Padding(
           padding: const EdgeInsets.only(top: 4),
