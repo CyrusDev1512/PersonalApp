@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 from collections.abc import Iterator
@@ -27,10 +28,8 @@ def _set_sqlite_pragmas(dbapi_conn, _record) -> None:
     cur = dbapi_conn.cursor()
     cur.execute("PRAGMA foreign_keys=ON")
     cur.execute("PRAGMA busy_timeout=5000")
-    try:
+    with contextlib.suppress(Exception):  # DB in-memory không hỗ trợ WAL
         cur.execute("PRAGMA journal_mode=WAL")
-    except Exception:  # pragma: no cover - in-memory DB không hỗ trợ WAL
-        pass
     cur.close()
 
 

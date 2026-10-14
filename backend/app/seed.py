@@ -31,7 +31,8 @@ RULES: dict[str, list[tuple[str, str, int]]] = {
             "trung nguyen", "kfc", "lotteria", "jollibee", "mcdonald", "pizza hut", "domino", "texas chicken",
             "com tam", "com ga", "com van phong", "com trua", "com chay", "pho bo", "pho ga", "bun bo", "bun cha",
             "bun dau", "bun rieu", "banh mi", "hu tieu", "tra sua", "an trua", "an toi", "an sang", "tien an",
-            "an uong", "nha hang", "quan an", "quan lau", "lau nuong", "mixue", "gong cha", "bach hoa xanh", "winmart", "coopmart",
+            "an uong", "nha hang", "quan an", "quan lau", "lau nuong", "mixue", "gong cha", "bach hoa xanh",
+            "winmart", "coopmart",
         ]
     ],
     "rent": [
@@ -53,7 +54,8 @@ RULES: dict[str, list[tuple[str, str, int]]] = {
     ],
     "shopping": [
         (p, "out", 70)
-        for p in ["shopee", "lazada", "tiki", "tiktok shop", "uniqlo", "dien may xanh", "the gioi di dong", "cellphones"]
+        for p in ["shopee", "lazada", "tiki", "tiktok shop", "uniqlo", "dien may xanh", "the gioi di dong",
+                  "cellphones"]
     ],
     "income": [(p, "in", 50) for p in ["luong", "tra luong", "tien thuong", "salary", "payroll", "bonus"]],
     "refund": [(p, "in", 40) for p in ["hoan tien", "refund", "hoan tra"]],
