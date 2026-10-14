@@ -149,6 +149,54 @@ void main() {
     });
   });
 
+  group('trường mới của hợp đồng', () {
+    test('Tx: goal_month, suggested_rule và tháng theo giờ VN', () {
+      final tx = Tx.fromJson({
+        'id': 1,
+        'direction': 'out',
+        'amount': 3000000,
+        // 23:30 ngày 31/10 giờ VN.
+        'bank_time': '2026-10-31T16:30:00Z',
+        'goal_id': 300,
+        'goal_name': 'Tiền trọ',
+        'goal_month': '2026-11',
+        'suggested_rule': 'chuyen tien tro',
+      });
+      expect(tx.goalMonth, '2026-11');
+      expect(tx.suggestedRule, 'chuyen tien tro');
+      expect(tx.month, '2026-10');
+      expect(tx.countedForLaterMonth, isTrue);
+
+      final sameMonth = Tx.fromJson({'id': 2, 'bank_time': '2026-11-01T01:00:00Z', 'goal_month': '2026-11'});
+      expect(sameMonth.countedForLaterMonth, isFalse);
+    });
+
+    test('Tx: thiếu / sai định dạng trường mới không lỗi', () {
+      final tx = Tx.fromJson({'id': 1, 'goal_month': 'abc', 'suggested_rule': '  '});
+      expect(tx.goalMonth, isNull);
+      expect(tx.suggestedRule, isNull);
+      expect(tx.month, isNull);
+      expect(tx.countedForLaterMonth, isFalse);
+      final old = Tx.fromJson({'id': 2, 'bank_time': '2026-10-14T02:59:00Z'});
+      expect(old.goalMonth, isNull);
+      expect(old.suggestedRule, isNull);
+    });
+
+    test('IngestHealth: warnings; stale theo warnings khi server không gửi', () {
+      final h = IngestHealth.fromJson({
+        'warnings': ['Đọc email ngân hàng đang lỗi', null, ''],
+      });
+      expect(h.warnings, ['Đọc email ngân hàng đang lỗi']);
+      expect(h.stale, isTrue);
+      expect(h.hasProblems, isTrue);
+
+      final ok = IngestHealth.fromJson({'stale': false, 'warnings': <Object>[]});
+      expect(ok.warnings, isEmpty);
+      expect(ok.hasProblems, isFalse);
+      expect(IngestHealth.fromJson({}).warnings, isEmpty);
+    });
+  });
+
   group('các endpoint khác', () {
     test('PATCH giao dịch gửi body và trả transaction + summary', () async {
       final server = FakeServer({

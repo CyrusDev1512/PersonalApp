@@ -86,6 +86,34 @@ void main() {
       expect(out.text.substring(out.selection.baseOffset).replaceAll('.', ''), '567');
     });
 
+    test('backspace ngay sau dấu chấm: xoá luôn chữ số đứng trước', () {
+      // "123.|456" → hệ thống chỉ xoá "." → "123|456".
+      final out = f.formatEditUpdate(_type('123.456', cursor: 4), _type('123456', cursor: 3));
+      expect(out.text, '12.456');
+      expect(out.selection.baseOffset, 3); // "12.|456"
+    });
+
+    test('giữ backspace giữa số: mỗi lần xoá một chữ số, không bị kẹt ở dấu chấm', () {
+      // "1.234|.567" → "123.|567" → "12.|567" → "1.|567".
+      var value = _type('1.234.567', cursor: 5);
+      final texts = <String>[];
+      for (var i = 0; i < 3; i++) {
+        final cursor = value.selection.baseOffset;
+        final edited = value.text.substring(0, cursor - 1) + value.text.substring(cursor);
+        value = f.formatEditUpdate(value, _type(edited, cursor: cursor - 1));
+        texts.add(value.text);
+      }
+      expect(texts, ['123.567', '12.567', '1.567']);
+      expect(value.text.substring(value.selection.baseOffset).replaceAll('.', ''), '567');
+    });
+
+    test('phím xoá tới (delete) ngay trước dấu chấm: xoá chữ số đứng sau', () {
+      // "123|.456" → hệ thống chỉ xoá "." → "123|456".
+      final out = f.formatEditUpdate(_type('123.456', cursor: 3), _type('123456', cursor: 3));
+      expect(out.text, '12.356');
+      expect(out.text.substring(out.selection.baseOffset).replaceAll('.', ''), '56');
+    });
+
     test('quá dài thì giữ giá trị cũ', () {
       final old = _type('1.234.567.890.123');
       final out = f.formatEditUpdate(old, _type('1.234.567.890.1234'));
@@ -98,6 +126,7 @@ void main() {
       // 18:00 UTC ngày 31/10 = 01:00 ngày 1/11 giờ VN.
       expect(currentMonthIct(DateTime.utc(2026, 10, 31, 18)), '2026-11');
       expect(currentMonthIct(DateTime.utc(2026, 10, 31, 16, 59)), '2026-10');
+      expect(monthOfIct(DateTime.utc(2026, 9, 30, 17)), '2026-10');
     });
 
     test('cộng trừ tháng và nhãn', () {

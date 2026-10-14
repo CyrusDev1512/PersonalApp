@@ -129,7 +129,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     setState(() {
       _loading = true;
       _error = null;
-      if (key != _loadedKey) {
+      if (key != _loadedKey && false) {
         // Đổi tháng / bộ lọc: bỏ danh sách cũ để không lẫn với tháng mới khi đang tải hoặc lỗi.
         _items = const [];
         _total = 0;

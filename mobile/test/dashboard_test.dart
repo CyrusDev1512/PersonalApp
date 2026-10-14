@@ -253,6 +253,99 @@ void main() {
     expect(chip.selected, isTrue);
   });
 
+  testWidgets('nguồn dữ liệu: hiện nguyên văn cảnh báo của server, không còn câu "48 giờ" cố định', (tester) async {
+    const warnings = [
+      'Đọc email ngân hàng đang lỗi từ 08:00 14/10.',
+      'Chưa nhận webhook SePay nào trong 48 giờ qua.',
+      '3 email chưa đọc được nội dung.',
+    ];
+    final server = _server(
+      summary: () => {
+        ...warningSummaryJson(),
+        'ingest_health': {
+          'stale': true,
+          'warnings': warnings,
+          'error_events': 0,
+          'unparsed_events': 3,
+          'sources': <String, Object>{},
+        },
+      },
+    );
+    await _pumpApp(tester, _stateFor(server));
+
+    final note = find.descendant(of: find.byKey(const Key('ingest_health_note')), matching: find.byType(Text));
+    expect(tester.widget<Text>(note).data, warnings.join('\n'));
+  });
+
+  testWidgets('nguồn dữ liệu: server cũ (stale, chưa có warnings) không báo sai "48 giờ"', (tester) async {
+    final server = _server(
+      summary: () => {
+        ...warningSummaryJson(),
+        'ingest_health': {'stale': true, 'error_events': 0, 'unparsed_events': 2},
+      },
+    );
+    await _pumpApp(tester, _stateFor(server));
+
+    final note = find.descendant(of: find.byKey(const Key('ingest_health_note')), matching: find.byType(Text));
+    final text = tester.widget<Text>(note).data!;
+    expect(text, contains('Nguồn dữ liệu ngân hàng đang gặp sự cố'));
+    expect(text, contains('2 email chưa đọc được nội dung.'));
+    expect(text, isNot(contains('48 giờ')));
+  });
+
+  testWidgets('mục tiêu tháng sau: tạo được, hiện trên Tổng quan và chạm để sửa', (tester) async {
+    final nextGoals = <Map<String, dynamic>>[];
+    final server = _server();
+    server.routes['GET /api/goals'] = (req) =>
+        req.url.queryParameters['month'] == '2026-11' ? nextGoals : warningSummaryJson()['goals'];
+    server.routes['POST /api/goals'] = (req) {
+      final goal = {
+        ...(req.json as Map<String, dynamic>),
+        'id': 300,
+        'category_name': 'Thuê trọ',
+        'category_icon': '🏠',
+        'spent': 0,
+        'auto_match': true,
+      };
+      nextGoals.add(goal);
+      return jsonResponse(goal, 201);
+    };
+    await _pumpApp(tester, _stateFor(server));
+
+    expect(server.where('GET', '/api/goals').last.url.queryParameters['month'], '2026-11');
+    expect(find.textContaining('Mục tiêu tháng sau'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'Thêm mục tiêu'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('goal_name')), 'Tiền trọ');
+    await tester.enterText(find.byKey(const Key('goal_amount')), '3500000');
+    await tester.tap(find.byKey(const ValueKey('goal_category_reserve')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('🏠 Thuê trọ').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('goal_series_hint')), findsNothing);
+    await tester.tap(find.text('Tháng sau (11/2026)'));
+    await tester.pumpAndSettle();
+    // Tháng này đã có "Tiền trọ" lặp lại cùng danh mục → báo sẽ cập nhật chuỗi đó.
+    expect(find.byKey(const Key('goal_series_hint')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('goal_save')));
+    await tester.pumpAndSettle();
+    expect((server.where('POST', '/api/goals').single.json as Map)['month'], '2026-11');
+    expect(find.text('Đã tạo mục tiêu cho tháng 11/2026'), findsOneWidget);
+
+    final section = find.byKey(const Key('next_month_goals'));
+    await tester.ensureVisible(section);
+    expect(find.text('Mục tiêu tháng sau (11/2026)'), findsOneWidget);
+    expect(find.descendant(of: section, matching: find.text('3.500.000đ')), findsOneWidget);
+
+    await tester.tap(find.descendant(of: section, matching: find.text('Tiền trọ')));
+    await tester.pumpAndSettle();
+    expect(find.text('Sửa mục tiêu'), findsOneWidget);
+    expect(find.text('Tháng 11/2026'), findsOneWidget);
+    expect(find.text('3.500.000'), findsOneWidget);
+  });
+
   group('lần đầu chạy', () {
     testWidgets('chưa có URL/token -> màn "Kết nối máy chủ"', (tester) async {
       SharedPreferences.setMockInitialValues({});
