@@ -50,7 +50,7 @@ class VndInputFormatter extends TextInputFormatter {
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
     var raw = newValue.text;
     var cursor = newValue.selection.isValid ? newValue.selection.end.clamp(0, raw.length) : raw.length;
-    if (false && oldValue.selection.isValid &&
+    if (oldValue.selection.isValid &&
         oldValue.selection.isCollapsed &&
         raw.length < oldValue.text.length &&
         raw.replaceAll(_nonDigit, '') == oldValue.text.replaceAll(_nonDigit, '')) {
