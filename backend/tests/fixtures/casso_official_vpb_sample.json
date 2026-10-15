@@ -1,0 +1,26 @@
+{
+  "_source": "https://github.com/CassoHQ/casso-webhook-v2-verify-signature (python.py; cùng vector trong php.php, golang.go, java.java, dotnet.cs)",
+  "_note": "Payload thử nghiệm của Casso (id 0, TK 88888888). Chữ ký đã kiểm chứng khớp với thuật toán mẫu.",
+  "checksum_key": "mgExMrjj4i7a1p8Cs6LmFbpCd8lbw4sSX4LZXPag7TKazeIogtR90tvWYTkwQbvs",
+  "signature_header": "t=1727948258788,v1=ed0a4bd2e826d5cb69988cdb141e6c1a080e21f3b57eb72cd78192220042b9e7dde0868fc667faea8e224900fa7904e7c88dfa098032fb2d6b6996856e8b7ff3",
+  "body": {
+    "error": 0,
+    "data": {
+      "id": 0,
+      "reference": "MA_GIAO_DICH_THU_NGHIEM",
+      "description": "giao dich thu nghiem",
+      "amount": 599000,
+      "runningBalance": 25000000,
+      "transactionDateTime": "2024-10-03 15:06:37",
+      "accountNumber": "88888888",
+      "bankName": "VPBank",
+      "bankAbbreviation": "VPB",
+      "virtualAccountNumber": "",
+      "virtualAccountName": "",
+      "counterAccountName": "NGUYEN VAN A",
+      "counterAccountNumber": "8888888888",
+      "counterAccountBankId": "970415",
+      "counterAccountBankName": "VietinBank"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+Delivered-To: nguoidung.synthetic@example.com
+Received: by 2002:a05:0000:0000:b0:000:0000:0000 with SMTP id synthetic; Wed,
+ 14 Oct 2026 03:21:06 -0700
+Authentication-Results: mx.google.com; dkim=pass header.i=@vietcombank.com.vn
+ header.s=synth1 header.b=SyNtHeTiC; spf=pass (google.com: domain of
+ noreply@info.vietcombank.com.vn designates 192.0.2.10 as permitted sender)
+ smtp.mailfrom=noreply@info.vietcombank.com.vn; dmarc=pass (p=REJECT sp=REJECT
+ dis=NONE) header.from=vietcombank.com.vn
+From: VCB Digibank <noreply@info.vietcombank.com.vn>
+To: nguoidung.synthetic@example.com
+Subject: =?utf-8?b?xq91IMSRw6NpIHRow6FuZyAxMCBkw6BuaCBjaG8gUXXDvSBraMOhY2g=?=
+Date: Wed, 14 Oct 2026 10:21:05 +0700
+Message-ID: <synthetic-vcb_garbage_promo@example.invalid>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Hoàn tiền tới 10% khi thanh toán bằng thẻ ghi nợ quốc tế.
+Giảm giá đến 50% tại các cửa hàng đối tác. Áp dụng từ 01/10/2026 đến 31/10/2026.
+Liên hệ 1900 0000 (số giả lập).

@@ -1,0 +1,71 @@
+Delivered-To: nguoidung.synthetic@example.com
+Received: by 2002:a05:0000:0000:b0:000:0000:0000 with SMTP id synthetic; Wed,
+ 14 Oct 2026 03:21:06 -0700
+Authentication-Results: mx.google.com; dkim=pass header.i=@vietcombank.com.vn
+ header.s=synth1 header.b=SyNtHeTiC; spf=pass (google.com: domain of
+ noreply@info.vietcombank.com.vn designates 192.0.2.10 as permitted sender)
+ smtp.mailfrom=noreply@info.vietcombank.com.vn; dmarc=pass (p=REJECT sp=REJECT
+ dis=NONE) header.from=vietcombank.com.vn
+From: VCB Digibank <noreply@info.vietcombank.com.vn>
+To: nguoidung.synthetic@example.com
+Subject: =?utf-8?b?QmnDqm4gbGFpIGNodXnhu4NuIHRp4buBbiBxdWEgdMOgaSBraG/huqNu?=
+Date: Wed, 14 Oct 2026 10:21:05 +0700
+Message-ID: <synthetic-vcb_receipt_transfer_out@example.invalid>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============8083722413262440712=="
+
+--===============8083722413262440712==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+VCB Digibank - Biên lai chuyển tiền qua tài khoản
+Ngày, giờ giao dịch: 14/10/2026 09:15
+Số lệnh giao dịch / Số tham chiếu: 5012ABCD1234
+Tài khoản nguồn: 0011001234567
+Tên người chuyển: NGUYEN VAN A
+Tài khoản người hưởng: 0123456789
+Tên người hưởng: TRAN THI B
+Tên ngân hàng hưởng: MB - Ngân hàng TMCP Quân đội
+Số tiền: 3.000.000 VND
+Số tiền bằng chữ: Ba triệu đồng
+Loại phí: Phí người chuyển trả
+Số tiền phí: 0 VND
+Nội dung chuyển tiền: NGUYEN VAN A chuyen tien tro thang 10
+Cảm ơn Quý khách đã sử dụng dịch vụ.
+
+--===============8083722413262440712==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<!DOCTYPE html><html><head><meta charset=3D'utf-8'><title>Th=C3=B4ng b=C3=A1o=
+</title><style>td{font-family:Arial}</style></head><body><h3>Bi=C3=AAn lai ch=
+uy=E1=BB=83n ti=E1=BB=81n qua t=C3=A0i kho=E1=BA=A3n</h3><p>K=C3=ADnh g=E1=BB=
+=ADi Qu=C3=BD kh=C3=A1ch NGUYEN VAN A,</p><table border=3D'1' cellspacing=3D'=
+0'><tr><td style=3D'padding:4px'>Ng=C3=A0y, gi=E1=BB=9D giao d=E1=BB=8Bch</td=
+><td><b>14/10/2026 09:15</b></td></tr><tr><td style=3D'padding:4px'>S=E1=BB=
+=91 l=E1=BB=87nh giao d=E1=BB=8Bch / S=E1=BB=91 tham chi=E1=BA=BFu</td><td><b=
+>5012ABCD1234</b></td></tr><tr><td style=3D'padding:4px'>T=C3=A0i kho=E1=BA=
+=A3n ngu=E1=BB=93n</td><td><b>0011001234567</b></td></tr><tr><td style=3D'pad=
+ding:4px'>T=C3=AAn ng=C6=B0=E1=BB=9Di chuy=E1=BB=83n</td><td><b>NGUYEN VAN A<=
+/b></td></tr><tr><td style=3D'padding:4px'>T=C3=A0i kho=E1=BA=A3n ng=C6=B0=E1=
+=BB=9Di h=C6=B0=E1=BB=9Fng</td><td><b>0123456789</b></td></tr><tr><td style=
+=3D'padding:4px'>T=C3=AAn ng=C6=B0=E1=BB=9Di h=C6=B0=E1=BB=9Fng</td><td><b>TR=
+AN THI B</b></td></tr><tr><td style=3D'padding:4px'>T=C3=AAn ng=C3=A2n h=C3=
+=A0ng h=C6=B0=E1=BB=9Fng</td><td><b>MB - Ng=C3=A2n h=C3=A0ng TMCP Qu=C3=A2n =
+=C4=91=E1=BB=99i</b></td></tr><tr><td style=3D'padding:4px'>S=E1=BB=91 ti=E1=
+=BB=81n</td><td><b>3.000.000 VND</b></td></tr><tr><td style=3D'padding:4px'>S=
+=E1=BB=91 ti=E1=BB=81n b=E1=BA=B1ng ch=E1=BB=AF</td><td><b>Ba tri=E1=BB=87u =
+=C4=91=E1=BB=93ng</b></td></tr><tr><td style=3D'padding:4px'>Lo=E1=BA=A1i ph=
+=C3=AD</td><td><b>Ph=C3=AD ng=C6=B0=E1=BB=9Di chuy=E1=BB=83n tr=E1=BA=A3</b><=
+/td></tr><tr><td style=3D'padding:4px'>S=E1=BB=91 ti=E1=BB=81n ph=C3=AD</td><=
+td><b>0 VND</b></td></tr><tr><td style=3D'padding:4px'>N=E1=BB=99i dung chuy=
+=E1=BB=83n ti=E1=BB=81n</td><td><b>NGUYEN VAN A chuyen tien tro thang 10</b><=
+/td></tr></table><p>Tr=C3=A2n tr=E1=BB=8Dng c=E1=BA=A3m =C6=A1n Qu=C3=BD kh=
+=C3=A1ch!<br/>T=E1=BA=A7ng 5, T=C3=B2a nh=C3=A0 Ng=C3=A2n h=C3=A0ng M=E1=BA=
+=ABu, H=C3=A0 N=E1=BB=99i. Hotline 1900 0000 (s=E1=BB=91 gi=E1=BA=A3 l=E1=BA=
+=ADp).</p><script>var x =3D 'S=E1=BB=91 ti=E1=BB=81n: 9.999.999 VND';</script=
+></body></html>
+
+--===============8083722413262440712==--

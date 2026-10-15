@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -218,3 +218,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# PersonalApp: local databases / runtime data
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+data/
+# dữ liệu tĩnh của skill (font index), không phải dữ liệu runtime
+!/.agents/skills/impeccable/scripts/data/
+
+# PersonalApp: khoá bí mật (Firebase service account, ...) và cấu hình Firebase của app
+secrets/
+google-services.json
+GoogleService-Info.plist

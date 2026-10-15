@@ -1,0 +1,35 @@
+{
+    "name": "Chi tiêu (bản demo)",
+    "short_name": "Chi tiêu",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#f4fbf9",
+    "theme_color": "#006a63",
+    "description": "Bản dùng thử app Chi tiêu: dữ liệu giả, chạy hoàn toàn trong trình duyệt, không cần máy chủ.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

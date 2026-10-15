@@ -1,0 +1,19 @@
+Delivered-To: nguoidung.synthetic@example.com
+Received: by 2002:a05:0000:0000:b0:000:0000:0000 with SMTP id synthetic; Wed,
+ 14 Oct 2026 03:21:06 -0700
+Authentication-Results: mx.google.com; dkim=fail header.d=vietcombank.com.vn;
+ spf=pass smtp.mailfrom=info.vietcombank.com.vn; dmarc=pass (p=REJECT)
+ header.from=info.vietcombank.com.vn
+From: VCB Digibank <noreply@info.vietcombank.com.vn>
+To: nguoidung.synthetic@example.com
+Subject: =?utf-8?b?VGjDtG5nIGLDoW8gZ2lhbyBk4buLY2g=?=
+Date: Wed, 14 Oct 2026 10:21:05 +0700
+Message-ID: <synthetic-vcb_dmarc_only@example.invalid>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Số tài khoản: 0011001234567
+Số tiền: -75,000 VND
+Thời gian: 14/10/2026 18:30:00
+Nội dung: GRAB*RIDE

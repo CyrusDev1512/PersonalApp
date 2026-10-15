@@ -1,0 +1,5 @@
+interface:
+  display_name: "verification-before-completion"
+  short_description: "Verify completion with scoped evidence"
+policy:
+  allow_implicit_invocation: true

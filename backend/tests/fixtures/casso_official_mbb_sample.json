@@ -1,0 +1,28 @@
+{
+  "_source": "https://github.com/CassoHQ/casso-webhook-v2-verify-signature (javascript.js; header cũng là ví dụ trong README.md)",
+  "_note": "Chữ ký trong file mẫu (signature_header_upstream) KHÔNG khớp ngay cả với chính code JS chính thức (chạy bằng Node 22 in ra false) -> vector lỗi từ phía upstream. js_generated_v1 là chữ ký mà code mẫu JS chính thức tự tính cho body/khoá/t này (đọc từ console.log khi chạy javascript.js).",
+  "checksum_key": "g3oZ950pJQ4k6REhOPGkx37RsXgWz9QJ9RCAZ7i0yagLF32XQZtemQ6r3JIo4MCr",
+  "signature_header_upstream": "t=1734924830020,v1=6cec920aa3352341d3710d4ce89de3c73481739bdf240c89a440fb988bfb113f87be23dc75ad16982f6fbdb65553b73f4e51e73ed4764928f0401cd4a949a4c8",
+  "timestamp": "1734924830020",
+  "js_generated_v1": "b3d9438862f167b4e441451b46adaff01f4aaa0c05fa86df1803b7452616c449b9f69837be23b76f79862b346c8bc90a4f1152397a886d4ec24e857cdf6ad08f",
+  "body": {
+    "error": 0,
+    "data": {
+      "id": 218897,
+      "reference": "FT24364030863634",
+      "description": "hoi lai 100 bao mun dua",
+      "amount": 16775000,
+      "runningBalance": 16775000,
+      "transactionDateTime": "2024-12-23 07:00:00",
+      "accountNumber": "123456789",
+      "bankName": "MBBank",
+      "bankAbbreviation": "MBB",
+      "virtualAccountNumber": "",
+      "virtualAccountName": "",
+      "counterAccountName": "",
+      "counterAccountNumber": "",
+      "counterAccountBankId": "",
+      "counterAccountBankName": ""
+    }
+  }
+}

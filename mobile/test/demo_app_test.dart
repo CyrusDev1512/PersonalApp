@@ -1,0 +1,182 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:personal_finance/api/api_client.dart';
+import 'package:personal_finance/demo/demo_app.dart';
+import 'package:personal_finance/demo/demo_backend.dart';
+import 'package:personal_finance/screens/connect_screen.dart';
+
+/// Màn hình điện thoại 390×844.
+void _usePhoneScreen(WidgetTester tester) {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
+Future<DemoBackend> _pumpDemo(WidgetTester tester) async {
+  _usePhoneScreen(tester);
+  final backend = DemoBackend(
+    clock: () => DateTime.utc(2026, 10, 15, 7),
+    latency: Duration.zero,
+    pushDelay: Duration.zero,
+  );
+  addTearDown(backend.dispose);
+  await tester.pumpWidget(DemoApp(backend: backend, refreshInterval: null));
+  await tester.pumpAndSettle();
+  return backend;
+}
+
+void main() {
+  setUpAll(() async {
+    await initializeDateFormatting('vi_VN');
+  });
+
+  testWidgets('bản dùng thử: thanh demo, bảng giả lập, "Rút ATM" -> WARNING + SnackBar thông báo đẩy', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pumpDemo(tester);
+
+    // Nhãn là một nút đọc màn hình; nút demo màu celadon (tertiary), không dùng men lam của "Thêm mục tiêu".
+    expect(find.bySemanticsLabel('Bản dùng thử, dữ liệu giả'), findsOneWidget);
+    final demoButton = tester.widget<FilledButton>(find.byKey(const Key('demo_simulate')));
+    final scheme = Theme.of(tester.element(find.byKey(const Key('demo_simulate')))).colorScheme;
+    expect(demoButton.style?.backgroundColor?.resolve({}), scheme.tertiary);
+    // 390 dp: nhãn và nút không vừa một hàng, nút xuống hàng thứ hai (không cắt chữ), vùng chạm 48 dp.
+    expect(tester.getSize(find.byKey(const Key('demo_simulate'))).height, greaterThanOrEqualTo(48));
+    expect(
+      tester.getRect(find.byKey(const Key('demo_simulate'))).top,
+      greaterThan(tester.getRect(find.byIcon(Icons.science_outlined)).bottom),
+    );
+    expect(find.text('Giả lập biến động số dư'), findsOneWidget);
+    expect(find.text('Tổng quan'), findsWidgets);
+    expect(find.text('An toàn'), findsOneWidget);
+    expect(find.text('4.000.000đ'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('demo_simulate')));
+    await tester.pumpAndSettle();
+    for (final title in [
+      'Rút ATM 3.500.000đ',
+      'Nhận lương 15.000.000đ',
+      'Chuyển tiền trọ 3.000.000đ',
+      'Mua sắm 600.000đ',
+    ]) {
+      expect(find.text(title), findsOneWidget);
+    }
+    await tester.scrollUntilVisible(find.text('Đặt lại dữ liệu demo'), 200, scrollable: find.byType(Scrollable).last);
+    expect(find.text('Đặt lại dữ liệu demo'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Rút ATM 3.500.000đ'), -200, scrollable: find.byType(Scrollable).last);
+
+    await tester.tap(find.text('Rút ATM 3.500.000đ'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('push_snackbar')), findsOneWidget);
+    // SnackBar gọn: tiêu đề + dòng đầu của nội dung, "Xem" để đọc đủ.
+    expect(
+      find.descendant(of: find.byKey(const Key('push_snackbar')), matching: find.text('Sắp chạm mức mục tiêu')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('push_snackbar')),
+        matching: find.textContaining('−3.500.000đ · VCB chính'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: find.byKey(const Key('status_hero')), matching: find.text('Sắp chạm mức mục tiêu')),
+      findsOne,
+    );
+    expect(find.text('500.000đ'), findsWidgets);
+    semantics.dispose();
+  });
+
+  testWidgets('"Ngắt kết nối" không cụt đường: nút "Kết nối lại bản dùng thử"', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pumpDemo(tester);
+    await tester.tap(find.text('Cài đặt'));
+    await tester.pumpAndSettle();
+    // Mục "Máy chủ" nằm cuối Cài đặt (ít dùng): cuộn tới.
+    await tester.scrollUntilVisible(find.text('Ngắt kết nối'), 300, scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Ngắt kết nối'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Ngắt kết nối'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ConnectScreen), findsOneWidget);
+    // Màn 390 px: nút xuống hàng thứ hai nên giữ đủ chữ, không rút gọn.
+    expect(
+      find.descendant(of: find.byKey(const Key('demo_reconnect')), matching: find.text('Kết nối lại bản dùng thử')),
+      findsOne,
+    );
+    expect(find.bySemanticsLabel('Kết nối lại bản dùng thử'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('demo_reconnect')));
+    await tester.pumpAndSettle();
+    expect(find.byType(ConnectScreen), findsNothing);
+    expect(find.text('Giả lập biến động số dư'), findsOneWidget);
+    expect(find.text('An toàn'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('tự nhập biến động (tự phân loại theo luật) rồi đặt lại dữ liệu demo', (tester) async {
+    final backend = await _pumpDemo(tester);
+    await tester.tap(find.byKey(const Key('demo_simulate')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('demo_amount')), '120000');
+    await tester.enterText(find.byKey(const Key('demo_content')), 'GRABFOOD COM TAM');
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('demo_custom_submit')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.byKey(const Key('demo_custom_submit')));
+    await tester.pumpAndSettle();
+
+    final client = ApiClient(baseUrl: demoBaseUrl, token: demoToken, client: backend);
+    final latest = (await client.listTransactions(limit: 1)).items.single;
+    expect((latest.amount, latest.categoryName, latest.description), (120000, 'Ăn uống', 'GRABFOOD COM TAM'));
+    // Không có cảnh báo quan trọng: không có thông báo đẩy, chỉ có SnackBar giải thích (lời trung tính).
+    expect(find.textContaining('không tạo cảnh báo quan trọng nên không có thông báo đẩy'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('demo_simulate')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.byKey(const Key('demo_reset')), 200, scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.byKey(const Key('demo_reset')));
+    await tester.pumpAndSettle();
+    expect(find.text('Đã đặt lại dữ liệu demo'), findsOneWidget);
+    expect((await client.listTransactions(limit: 1)).items.single.description, isNot('GRABFOOD COM TAM'));
+  });
+
+  testWidgets('màn hình rộng (1280×800): NavigationRail, cột nội dung ≤ 720 dp ở giữa, thanh demo trải ngang', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final backend = DemoBackend(
+      clock: () => DateTime.utc(2026, 10, 15, 7),
+      latency: Duration.zero,
+      pushDelay: Duration.zero,
+    );
+    addTearDown(backend.dispose);
+    await tester.pumpWidget(DemoApp(backend: backend, refreshInterval: null));
+    await tester.pumpAndSettle();
+
+    // Cửa sổ ≥ 840 dp: NavigationRail thay cho NavigationBar, FAB "Thêm mục tiêu" ở đầu rail.
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const Key('rail_add_goal')), findsOneWidget);
+    expect(find.widgetWithText(FloatingActionButton, 'Thêm mục tiêu'), findsOneWidget);
+    // Nội dung không kéo giãn: thân màn là cột tối đa 720 dp, căn giữa phần còn lại bên phải rail; app bar rộng
+    // hết phần đó, tiêu đề thẳng mép trái của nội dung.
+    final rail = tester.getRect(find.byType(NavigationRail));
+    final appBar = tester.getRect(find.widgetWithText(AppBar, 'Tổng quan'));
+    expect(appBar.left, rail.right);
+    expect(appBar.right, 1280);
+    final hero = tester.getRect(find.byKey(const ValueKey('dashboard_hero')));
+    expect(hero.width, lessThanOrEqualTo(720));
+    expect(hero.center.dx, moreOrLessEquals((rail.right + 1280) / 2, epsilon: 1));
+    // Thanh demo vẫn trải hết bề ngang, nút giả lập ở cuối thanh.
+    final banner = tester.getRect(find.byKey(const Key('demo_simulate')));
+    expect(banner.right, greaterThan(1280 - 200));
+    expect(find.text('An toàn'), findsOneWidget);
+  });
+}

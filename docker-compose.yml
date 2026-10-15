@@ -1,0 +1,62 @@
+# Tên dự án cố định: volume dữ liệu luôn là "personalapp_app-data", dù thư mục code tên gì
+# (vd. giải nén bản ZIP mới vào thư mục khác vẫn dùng lại đúng dữ liệu cũ).
+name: personalapp
+
+services:
+  app:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false  # thiếu APP_TOKEN thì server tự báo lỗi và dừng
+    environment:
+      DATABASE_URL: sqlite:////data/app.db
+    volumes:
+      - app-data:/data
+      # Khoá Firebase cho thông báo đẩy (tuỳ chọn): tạo thư mục ./secrets và đặt file fcm.json vào đó
+      - ./secrets:/run/secrets:ro
+    ports:
+      # Mặc định chỉ mở cho máy này. Muốn điện thoại trong mạng LAN truy cập: BIND_ADDR=0.0.0.0 trong .env
+      # HOST_PORT: cổng trên máy chủ (mặc định 8000). Windows đôi khi giữ sẵn dải cổng chứa 8000 (Hyper-V/WSL) ->
+      # lỗi "access permissions": đặt HOST_PORT=18000 trong .env. ngrok đi qua mạng Docker nên không phụ thuộc cổng này.
+      - "${BIND_ADDR:-127.0.0.1}:${HOST_PORT:-8000}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  # ngrok (tuỳ chọn, gói miễn phí): docker compose --profile ngrok up -d
+  # (setup.cmd ghi COMPOSE_PROFILES=ngrok vào .env, nên "docker compose up -d" thường cũng đã gồm ngrok.)
+  # Mở server ra Internet qua HTTPS bằng tên miền miễn phí cố định của tài khoản ngrok (NGROK_DOMAIN).
+  # NGROK_AUTHTOKEN và NGROK_DOMAIN lấy từ file .env; chỉ hai biến này được đưa vào container ngrok.
+  # Tham số cuối: có NGROK_DOMAIN -> "--url=https://<NGROK_DOMAIN>"; để trống -> "--inspect=true" (giá trị mặc
+  # định, vô hại), tức "ngrok http app:8000" và ngrok tự dùng tên miền miễn phí của tài khoản.
+  # --log=stdout: mặc định ngrok không ghi log khi chạy không có màn hình; cần log để "docker compose logs ngrok" có nội dung.
+  # Phiên bản ghim cứng (tag + digest): ngrok agent 3.39.11, phát hành 12/08/2026. update.cmd KHÔNG tự nâng bản này:
+  # khi ngrok ngừng nhận agent cũ (log báo agent quá cũ, vd. ERR_NGROK_121), người bảo trì phải sửa tag + digest ở đây.
+  # Chữa tạm không cần sửa file này: đặt NGROK_IMAGE=ngrok/ngrok:alpine trong .env rồi chạy lại setup.cmd.
+  ngrok:
+    image: ${NGROK_IMAGE:-ngrok/ngrok:3.39.11-alpine@sha256:187e588f6c4efe3b29cd3eea9fcd768a1afa7342319e3cee9aeb5af6a9cf64fd}
+    command: ["http", "app:8000", "--log=stdout", "${NGROK_DOMAIN:+--url=https://}${NGROK_DOMAIN:---inspect=true}"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    depends_on:
+      - app
+    restart: unless-stopped
+    profiles: ["ngrok"]
+
+  # Cloudflare Tunnel (tuỳ chọn): docker compose --profile tunnel up -d
+  # Trong Cloudflare Zero Trust, trỏ Public Hostname tới http://app:8000
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - app
+    restart: unless-stopped
+    profiles: ["tunnel"]
+
+volumes:
+  app-data:
