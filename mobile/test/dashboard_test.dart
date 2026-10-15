@@ -483,6 +483,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('Sai token'), findsOneWidget);
       expect(find.byType(ConnectScreen), findsOneWidget);
+      // Bước token lỗi: lỗi nằm dưới bước đó.
+      expect(
+        tester.getRect(find.byKey(const Key('connect_error'))).top,
+        greaterThan(tester.getRect(find.text('Token hợp lệ (/api/summary)')).bottom),
+      );
 
       // Đúng token.
       token = 'dung';
@@ -514,6 +519,10 @@ void main() {
       await tester.tap(find.byKey(const Key('connect_submit')));
       await tester.pumpAndSettle();
       expect(find.text(ApiMessages.network), findsOneWidget);
+      // Lỗi nằm ngay dưới bước bị lỗi (/health), phía trên bước token chưa chạy.
+      final error = tester.getRect(find.byKey(const Key('connect_error')));
+      expect(error.top, greaterThan(tester.getRect(find.text('Máy chủ phản hồi (/health)')).bottom));
+      expect(error.bottom, lessThan(tester.getRect(find.text('Token hợp lệ (/api/summary)')).top));
     });
   });
 }

@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart' show FontLoader;
+import 'package:flutter/services.dart' show FontLoader, LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:personal_finance/api/api_client.dart';
@@ -327,7 +327,8 @@ void main() {
       PushMessage.fromData(
         {'alert_id': '10', 'kind': 'tx', 'level': 'WARNING', 'transaction_id': '55'},
         title: '⚠️ Sắp chạm mức mục tiêu',
-        body: '−3.500.000đ · VCB chính\nSố dư: 6.500.000đ\nĐược tiêu: 500.000đ\nDòng 4\nDòng 5',
+        // Dòng đầu của máy chủ kết thúc bằng giờ: SnackBar bỏ giờ (không bị cắt giữa giờ).
+        body: '−3.500.000đ · VCB chính · 17:38 15/10\nSố dư: 6.500.000đ\nĐược tiêu: 500.000đ\nDòng 4\nDòng 5',
       ),
     );
     await tester.pumpAndSettle();
@@ -519,6 +520,92 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  group('sửa sau đánh giá', () {
+    testWidgets('Thêm mục tiêu: số tiền quá giới hạn báo bằng tiếng Việt; "Tiết kiệm thuần" không bị cắt ở 360 dp', (
+      tester,
+    ) async {
+      final (server, _) = await _pump(tester, size: const Size(360, 780));
+      await tester.tap(find.widgetWithText(FloatingActionButton, 'Thêm mục tiêu'));
+      await tester.pumpAndSettle();
+      final category = tester.renderObject<RenderParagraph>(
+        find.descendant(
+          of: find.byKey(const ValueKey('goal_category_reserve')),
+          matching: find.text('Tiết kiệm thuần'),
+        ),
+      );
+      expect(category.didExceedMaxLines, isFalse);
+      await tester.enterText(find.byKey(const Key('goal_name')), 'Mua nhà');
+      await tester.enterText(find.byKey(const Key('goal_amount')), '200000000000');
+      await tester.tap(find.byKey(const Key('goal_save')));
+      await tester.pumpAndSettle();
+      expect(find.text('Số tiền tối đa 100.000.000.000đ'), findsOneWidget);
+      expect(server.where('POST', '/api/goals'), isEmpty);
+    });
+
+    testWidgets('bảng phân loại: chip đang chọn thay icon bằng dấu tích (không vẽ chồng)', (tester) async {
+      await _pump(tester);
+      await _goTab(tester, 'Giao dịch');
+      await tester.tap(find.text('GRABFOOD'));
+      await tester.pumpAndSettle();
+      final chips = tester.widgetList<ChoiceChip>(find.byType(ChoiceChip)).toList();
+      final selected = chips.where((c) => c.selected).toList();
+      expect(selected, hasLength(1));
+      expect(selected.single.avatar, isNull);
+      expect(chips.where((c) => !c.selected).every((c) => c.avatar != null), isTrue);
+      expect(
+        tester
+            .widget<Wrap>(find.ancestor(of: find.byType(ChoiceChip).first, matching: find.byType(Wrap)).first)
+            .runSpacing,
+        0,
+      );
+    });
+
+    testWidgets('Cảnh báo ở 200% / 360 dp: giờ xuống dưới tiêu đề, tiêu đề ngắn không bị cắt', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(tester, size: const Size(360, 780));
+      await _goTab(tester, 'Cảnh báo');
+      final title = find.text('Sắp chạm mức mục tiêu');
+      expect(tester.renderObject<RenderParagraph>(title).didExceedMaxLines, isFalse);
+      expect(tester.getRect(find.text('09:59')).top, greaterThanOrEqualTo(tester.getRect(title).bottom));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('bàn phím: Tab đi hết nội dung Tổng quan rồi mới tới FAB và thanh điều hướng', (tester) async {
+      await _pump(tester, size: const Size(390, 844));
+      String where() {
+        final context = FocusManager.instance.primaryFocus?.context;
+        if (context == null) return 'none';
+        if (context.findAncestorWidgetOfExactType<FloatingActionButton>() != null) return 'fab';
+        if (context.findAncestorWidgetOfExactType<NavigationBar>() != null) return 'nav';
+        return 'content';
+      }
+
+      final seen = <String>[];
+      for (var i = 0; i < 30; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pumpAndSettle();
+        seen.add(where());
+        if (seen.where((w) => w == 'nav').length >= 4) break;
+      }
+      final firstFab = seen.indexOf('fab');
+      expect(firstFab, greaterThan(3), reason: 'nhiều mục nội dung trước FAB: $seen');
+      expect(seen.sublist(0, firstFab).every((w) => w == 'content'), isTrue, reason: '$seen');
+      expect(seen.sublist(firstFab + 1, firstFab + 5), ['nav', 'nav', 'nav', 'nav'], reason: '$seen');
+    });
+
+    testWidgets('Sửa tài khoản: ngân hàng là chữ chỉ đọc (không phải ô bị khoá)', (tester) async {
+      await _pump(tester);
+      await _goTab(tester, 'Cài đặt');
+      await tester.tap(find.text('VCB chính ··6789'));
+      await tester.pumpAndSettle();
+      final bank = find.byKey(const Key('account_bank_readonly'));
+      expect(bank, findsOneWidget);
+      expect(find.descendant(of: bank, matching: find.text('Vietcombank')), findsOneWidget);
+      expect(find.ancestor(of: find.text('Vietcombank'), matching: find.byType(InputDecorator)), findsNothing);
+    });
+  });
 
   group('chữ 200% ở 360×780 không tràn bố cục', () {
     Future<void> pump200(WidgetTester tester) async {

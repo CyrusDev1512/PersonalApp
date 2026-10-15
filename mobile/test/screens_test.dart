@@ -236,6 +236,22 @@ void main() {
     await tester.tap(find.widgetWithText(SnackBarAction, 'Hoàn tác'));
     await tester.pumpAndSettle();
     expect(server.where('PATCH', '/api/transactions/55').last.json, {'excluded': false});
+
+    // Bật cả hai: loại trừ thắng (máy chủ loại trừ trước rồi mới gán tháng sau, giao dịch loại trừ sẽ dính vào
+    // mục tiêu tháng sau). "Tính cho tháng sau" tắt và khoá khi đang loại trừ, body không có for_next_month.
+    await tester.tap(find.text('RUT TIEN ATM'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tính cho tháng sau'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Loại trừ'));
+    await tester.pumpAndSettle();
+    final later = tester.widget<SwitchListTile>(find.byKey(const Key('tx_for_next_month')));
+    expect(later.value, isFalse);
+    expect(later.onChanged, isNull);
+    expect(find.text('Giao dịch loại trừ không tính cho mục tiêu nào'), findsOneWidget);
+    await tester.tap(find.text('Lưu thay đổi'));
+    await tester.pumpAndSettle();
+    expect(server.where('PATCH', '/api/transactions/55').last.json, {'excluded': true});
   });
 
   testWidgets('Nhớ luật: dùng cụm từ server gợi ý; không có thì ô trống và bắt buộc nhập', (tester) async {
@@ -347,7 +363,8 @@ void main() {
               categoryId: 2,
               categoryName: 'Thuê trọ',
               goalId: 300,
-              goalName: 'Tiền trọ',
+              // Máy chủ gửi goal_name kèm "(YYYY-MM)" (backend/app/api/serialize.py): app ghi tháng một lần.
+              goalName: 'Tiền trọ (2026-11)',
               goalMonth: '2026-11',
             ),
           ],
@@ -388,6 +405,8 @@ void main() {
     expect(find.text('Tính cho tháng sau'), findsNothing);
     expect(find.byKey(const Key('tx_counted_later')), findsOneWidget);
     expect(find.text('Đã tính cho tháng 11/2026'), findsOneWidget);
+    expect(find.text('Mục tiêu: Tiền trọ'), findsOneWidget);
+    expect(find.textContaining('(2026-11)'), findsNothing);
     expect(server.where('PATCH', '/api/transactions/62'), isEmpty);
   });
 
