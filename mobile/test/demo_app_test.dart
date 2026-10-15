@@ -59,7 +59,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('push_snackbar')), findsOneWidget);
-    expect(find.textContaining('⚠️ Sắp chạm mức mục tiêu\n−3.500.000đ · VCB chính'), findsOneWidget);
+    // SnackBar gọn: tiêu đề + dòng đầu của nội dung, "Xem" để đọc đủ.
+    expect(
+      find.descendant(of: find.byKey(const Key('push_snackbar')), matching: find.text('⚠️ Sắp chạm mức mục tiêu')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('push_snackbar')),
+        matching: find.textContaining('−3.500.000đ · VCB chính'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Sắp chạm mức mục tiêu'), findsOneWidget);
     expect(find.text('500.000đ'), findsWidgets);
     semantics.dispose();
@@ -117,7 +128,9 @@ void main() {
     expect((await client.listTransactions(limit: 1)).items.single.description, isNot('GRABFOOD COM TAM'));
   });
 
-  testWidgets('màn hình rộng (1280×800): app hiện thành cột cỡ điện thoại ở giữa, kể cả thanh demo', (tester) async {
+  testWidgets('màn hình rộng (1280×800): NavigationRail, cột nội dung ≤ 720 dp ở giữa, thanh demo trải ngang', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1280, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -130,10 +143,19 @@ void main() {
     await tester.pumpWidget(DemoApp(backend: backend, refreshInterval: null));
     await tester.pumpAndSettle();
 
-    expect(tester.getSize(find.byType(NavigationBar)).width, 440);
-    expect(tester.getCenter(find.byType(NavigationBar)).dx, 640);
+    // Cửa sổ ≥ 840 dp: NavigationRail thay cho NavigationBar, FAB "Thêm mục tiêu" ở đầu rail.
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const Key('rail_add_goal')), findsOneWidget);
+    expect(find.widgetWithText(FloatingActionButton, 'Thêm mục tiêu'), findsOneWidget);
+    // Nội dung không kéo giãn: cột tối đa 720 dp, căn giữa phần còn lại bên phải rail.
+    final rail = tester.getRect(find.byType(NavigationRail));
+    final appBar = tester.getRect(find.widgetWithText(AppBar, 'Tổng quan'));
+    expect(appBar.width, lessThanOrEqualTo(720));
+    expect(appBar.center.dx, moreOrLessEquals((rail.right + 1280) / 2, epsilon: 1));
+    // Thanh demo vẫn trải hết bề ngang, nút giả lập ở cuối thanh.
     final banner = tester.getRect(find.byKey(const Key('demo_simulate')));
-    expect(banner.right, lessThanOrEqualTo(640 + 220));
+    expect(banner.right, greaterThan(1280 - 200));
     expect(find.text('An toàn'), findsOneWidget);
   });
 }

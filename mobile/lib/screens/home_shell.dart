@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import '../state/home_tabs.dart';
+import '../widgets/adaptive.dart';
 import 'alerts_screen.dart';
 import 'dashboard_screen.dart';
 import 'settings_screen.dart';
@@ -75,27 +76,100 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final unread = context.select<AppState, int>((s) => s.summary?.unreadAlerts ?? 0);
+    // Cửa sổ rộng (≥ 840 dp): NavigationRail bên trái, FAB "Thêm mục tiêu" ở đầu rail.
+    final useRail = WindowClass.of(context).usesRail;
     // Giữ trạng thái các tab (tháng, bộ lọc, vị trí cuộn, chữ đang gõ) khi chuyển tab; tab tự tải lại khi hiện lại.
     final tabs = <Widget>[
-      DashboardScreen(onOpenUncategorized: _openUncategorized, onOpenAlerts: () => _select(HomeTab.alerts)),
+      DashboardScreen(onOpenUncategorized: _openUncategorized),
       TransactionsScreen(controller: _transactions, active: _index == HomeTab.transactions),
       AlertsScreen(active: _index == HomeTab.alerts),
       SettingsScreen(active: _index == HomeTab.settings),
     ];
-    final body = IndexedStack(
-      index: _index,
-      children: [
-        for (var i = 0; i < tabs.length; i++)
-          // Tab ẩn: tắt Hero (các FAB trùng tag mặc định) và animation.
-          HeroMode(
-            enabled: i == _index,
-            child: TickerMode(enabled: i == _index, child: _opened.contains(i) ? tabs[i] : const SizedBox.shrink()),
-          ),
-      ],
+    final body = ShellScope(
+      primaryActionInRail: useRail,
+      child: IndexedStack(
+        index: _index,
+        children: [
+          for (var i = 0; i < tabs.length; i++)
+            // Tab ẩn: tắt Hero (các FAB trùng tag mặc định) và animation.
+            HeroMode(
+              enabled: i == _index,
+              child: TickerMode(
+                enabled: i == _index,
+                // Màn hình rộng: một cột nội dung tối đa 720 dp ở giữa, không kéo giãn bố cục điện thoại.
+                child: _opened.contains(i) ? ContentColumn(child: tabs[i]) : const SizedBox.shrink(),
+              ),
+            ),
+        ],
+      ),
     );
-    return Scaffold(
-      body: body,
-      bottomNavigationBar: NavigationBar(
+    final alertsBadge = unread > 99 ? '99+' : '$unread';
+    if (useRail) {
+      // Không bọc Scaffold: Scaffold của từng tab là gốc, nên SnackBar nổi trong cột nội dung, trên FAB của tab.
+      return Material(
+        color: Theme.of(context).colorScheme.surface,
+        child: Row(
+          children: [
+            NavigationRail(
+              selectedIndex: _index,
+              onDestinationSelected: _select,
+              leading: const _RailPrimaryAction(),
+              destinations: [
+                const NavigationRailDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: Text('Tổng quan'),
+                ),
+                const NavigationRailDestination(
+                  icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long),
+                  label: Text('Giao dịch'),
+                ),
+                NavigationRailDestination(
+                  icon: Badge(
+                    isLabelVisible: unread > 0,
+                    label: Text(alertsBadge),
+                    child: const Icon(Icons.notifications_outlined),
+                  ),
+                  selectedIcon: Badge(
+                    isLabelVisible: unread > 0,
+                    label: Text(alertsBadge),
+                    child: const Icon(Icons.notifications),
+                  ),
+                  label: const Text('Cảnh báo'),
+                ),
+                const NavigationRailDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: Text('Cài đặt'),
+                ),
+              ],
+            ),
+            Expanded(child: body),
+          ],
+        ),
+      );
+    }
+    // Không bọc Scaffold: Scaffold của từng tab là gốc, nên SnackBar nổi phía trên FAB của tab (không đè lên
+    // "Thêm mục tiêu"). Thanh điều hướng tự chừa vùng cử chỉ; phần nội dung bỏ phần đệm dưới đó đi. Bàn phím đang
+    // mở: thanh điều hướng nằm dưới bàn phím nên ẩn đi, để Scaffold của tab tự tránh bàn phím cho đúng (cấu trúc
+    // cây giữ nguyên để không mất trạng thái các tab).
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: Column(
+        children: [
+          Expanded(
+            child: MediaQuery.removePadding(context: context, removeBottom: !keyboard, child: body),
+          ),
+          if (keyboard) const SizedBox.shrink() else _bottomBar(unread, alertsBadge),
+        ],
+      ),
+    );
+  }
+
+  Widget _bottomBar(int unread, String alertsBadge) {
+    return NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: _select,
         destinations: [
@@ -112,12 +186,12 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(
             icon: Badge(
               isLabelVisible: unread > 0,
-              label: Text(unread > 99 ? '99+' : '$unread'),
+              label: Text(alertsBadge),
               child: const Icon(Icons.notifications_outlined),
             ),
             selectedIcon: Badge(
               isLabelVisible: unread > 0,
-              label: Text(unread > 99 ? '99+' : '$unread'),
+              label: Text(alertsBadge),
               child: const Icon(Icons.notifications),
             ),
             label: 'Cảnh báo',
@@ -128,6 +202,28 @@ class _HomeShellState extends State<HomeShell> {
             label: 'Cài đặt',
           ),
         ],
+    );
+  }
+}
+
+/// FAB "Thêm mục tiêu" ở đầu NavigationRail (cửa sổ rộng). Ẩn (không vô hiệu hoá) khi chưa có dữ liệu nào
+/// vì lỗi tải: lúc đó "Thử lại" là hành động của màn hình.
+class _RailPrimaryAction extends StatelessWidget {
+  const _RailPrimaryAction();
+
+  @override
+  Widget build(BuildContext context) {
+    final noData = context.select<AppState, bool>((s) => s.summary == null && s.error != null);
+    if (noData) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: FloatingActionButton.extended(
+        key: const Key('rail_add_goal'),
+        // Không dùng Hero: tab Giao dịch có FAB riêng với tag mặc định.
+        heroTag: null,
+        onPressed: () => DashboardScreen.openGoalForm(context),
+        icon: const Icon(Icons.add),
+        label: const Text('Thêm mục tiêu'),
       ),
     );
   }

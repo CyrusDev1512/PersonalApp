@@ -1,21 +1,36 @@
 import 'package:flutter/material.dart';
 
 import '../models/forecast.dart';
+import '../theme/status_colors.dart';
+import '../theme/tokens.dart';
+import '../theme/typography.dart';
 import '../utils/currency.dart';
+import 'first_line_icon.dart';
+import 'list_group.dart';
+import 'money_text.dart';
 
-/// Màu tiêu đề dự báo: đỏ (chạm mức sàn trong ≤ 7 ngày), hổ phách (chạm trong tháng), còn lại `null` (màu chữ thường).
-Color? forecastColor(ForecastSeverity severity) => switch (severity) {
-  ForecastSeverity.danger => Colors.red.shade700,
-  ForecastSeverity.warning => Colors.amber.shade800,
-  ForecastSeverity.neutral => null,
-};
+/// Màu tiêu đề dự báo: `danger.foreground` (chạm mức sàn trong ≤ 7 ngày), `warning.foreground` (chạm trong
+/// tháng), còn lại `null` (màu chữ thường `onSurface`).
+Color? forecastColor(BuildContext context, ForecastSeverity severity) {
+  final status = StatusColors.of(context);
+  return switch (severity) {
+    ForecastSeverity.danger => status.danger.foreground,
+    ForecastSeverity.warning => status.warning.foreground,
+    ForecastSeverity.neutral => null,
+  };
+}
 
 String _two(int v) => v.toString().padLeft(2, '0');
 
-/// Thẻ "Dự báo cuối tháng" ở Tổng quan (ngay dưới banner trạng thái).
+/// Khối "Dự báo cuối tháng" ở Tổng quan (DESIGN.md › Forecast block): một nhóm phẳng, không viền màu.
 ///
-/// Ẩn khi không có dự báo (tháng cũ) hoặc `status = unavailable` (chưa biết số dư);
-/// `insufficient_data` chỉ hiện một dòng chữ mờ.
+/// Dòng đầu: icon 20 dp + câu tóm tắt của máy chủ (`titleSmall` 600), màu theo mức độ. Sau đó tối đa hai câu
+/// có số tiền ("Nên chi tối đa ~120.000đ mỗi ngày", "Cuối tháng dự kiến còn / thiếu ~…") rồi các dòng
+/// `details` của máy chủ (bỏ dòng trùng ý với hai câu trên). Một số lớn duy nhất của Tổng quan nằm ở hero, nên
+/// ở đây là câu, không phải ô số liệu.
+///
+/// Ẩn khi không có dự báo (tháng cũ) hoặc `status = unavailable` (chưa biết số dư); `insufficient_data` chỉ
+/// hiện một dòng chữ mờ.
 class ForecastCard extends StatelessWidget {
   const ForecastCard({super.key, required this.forecast, this.month});
 
@@ -24,95 +39,97 @@ class ForecastCard extends StatelessWidget {
   /// Tháng ("YYYY-MM") của tổng quan, để biết ngày chạm mức sàn có nằm trong tháng không.
   final String? month;
 
-  /// Có hiện thẻ không.
+  /// Có hiện khối không.
   static bool shouldShow(Forecast? forecast) => forecast != null && forecast.isDisplayable;
 
   @override
   Widget build(BuildContext context) {
     final f = forecast;
     if (f == null || !shouldShow(f)) return const SizedBox.shrink();
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final severity = f.severity(month: month);
-    final color = forecastColor(severity);
-
-    final children = <Widget>[
-      Row(
-        children: [
-          Icon(_icon(f, severity), size: 20, color: color ?? scheme.onSurfaceVariant),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Dự báo cuối tháng',
-              style: theme.textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 6),
-      if (f.isOk) ..._okContent(context, f, color) else ..._mutedContent(context, f),
-    ];
-
-    return Card(
+    return Container(
       key: const Key('forecast_card'),
-      margin: EdgeInsets.zero,
-      shape: color == null
-          ? null
-          : RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: color.withValues(alpha: 0.6)),
-            ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+      decoration: ListGroup.decoration(context),
+      padding: const EdgeInsets.all(Space.s4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: f.isOk ? _okContent(context, f) : _mutedContent(context, f),
       ),
     );
   }
 
-  static IconData _icon(Forecast f, ForecastSeverity severity) {
-    if (!f.isOk) return Icons.hourglass_empty;
-    return switch (severity) {
-      ForecastSeverity.danger => Icons.trending_down,
-      ForecastSeverity.warning => Icons.warning_amber_rounded,
-      ForecastSeverity.neutral => Icons.insights,
-    };
-  }
+  static IconData _icon(ForecastSeverity severity) => switch (severity) {
+    ForecastSeverity.danger => Icons.trending_down,
+    ForecastSeverity.warning => Icons.warning_amber_rounded,
+    ForecastSeverity.neutral => Icons.insights,
+  };
 
-  /// Câu tóm tắt dự phòng khi server không gửi `headline`.
+  /// Câu tóm tắt dự phòng khi máy chủ không gửi `headline`.
   static String _fallbackHeadline(Forecast f) {
     final hit = f.floorHitDate;
     if (hit != null) return 'Chi như hiện tại thì khoảng ngày ${_two(hit.day)}/${_two(hit.month)} sẽ chạm mức sàn';
     return 'Chi như hiện tại thì cuối tháng vẫn trên mức sàn';
   }
 
-  /// Tiêu đề + các dòng `details` của server giữ nguyên (đã gồm tốc độ chi, gợi ý chi tối đa/ngày, ngân sách
-  /// vượt nhịp, "Ước tính sơ bộ"…); chỉ thêm số liệu không có trong đó: được tiêu cuối tháng (dự kiến).
-  List<Widget> _okContent(BuildContext context, Forecast f, Color? color) {
+  List<Widget> _okContent(BuildContext context, Forecast f) {
     final theme = Theme.of(context);
-    final small = theme.textTheme.bodySmall;
+    final scheme = theme.colorScheme;
+    final severity = f.severity(month: month);
+    final color = forecastColor(context, severity);
+    final headlineStyle = theme.textTheme.titleSmall!.copyWith(color: color ?? scheme.onSurface);
     final headline = f.headline ?? _fallbackHeadline(f);
+    final body = theme.textTheme.bodyLarge!.copyWith(color: scheme.onSurface);
+    final small = theme.textTheme.bodySmall!.copyWith(color: scheme.onSurfaceVariant);
+
+    final safe = f.safeDailySpend;
     final freeEnd = f.projectedFreeEnd;
-    // Tiêu đề server có thể đã nói số này ("…cuối tháng còn khoảng 800.000đ được tiêu").
-    final showFreeEnd = freeEnd != null && !headline.contains(formatVnd(freeEnd));
-    return [
-      Text(
-        headline,
-        key: const Key('forecast_headline'),
-        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: color),
-      ),
+    // Câu tóm tắt của máy chủ có thể đã nói số được tiêu cuối tháng.
+    final showFreeEnd = freeEnd != null && !headline.contains(formatGrouped(freeEnd.abs()));
+    final safeText = safe == null ? null : '~${formatGrouped(safe)}đ';
+    // Dòng chi tiết trùng ý với câu "Nên chi tối đa …" (cùng số tiền) thì không lặp lại.
+    final details = [
       for (final line in f.details)
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(line, style: small),
+        if (safeText == null || !line.contains(safeText)) line,
+    ];
+    final lowConfidenceInDetails = details.any((d) => d.contains('Ước tính sơ bộ'));
+
+    return [
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FirstLineIcon(_icon(severity), size: 20, textStyle: headlineStyle, color: color ?? scheme.onSurfaceVariant),
+          const SizedBox(width: Space.s2),
+          Expanded(child: Text(headline, key: const Key('forecast_headline'), style: headlineStyle)),
+        ],
+      ),
+      if (safe != null) ...[
+        const SizedBox(height: Space.s3),
+        MoneySentence(
+          ['Nên chi tối đa ', MoneyParts.of(safe, estimate: true), ' mỗi ngày'],
+          key: const Key('forecast_safe_daily'),
+          style: body,
+          moneyStyle: MoneyStyle.body,
         ),
+      ],
       if (showFreeEnd) ...[
-        const SizedBox(height: 8),
-        _Fact(
+        SizedBox(height: safe != null ? Space.s1 : Space.s3),
+        MoneySentence(
+          freeEnd < 0
+              ? ['Cuối tháng dự kiến thiếu ', MoneyParts.of(-freeEnd, estimate: true), ' cho mục tiêu']
+              : ['Cuối tháng dự kiến còn ', MoneyParts.of(freeEnd, estimate: true), ' được tiêu'],
           key: const Key('forecast_free_end'),
-          icon: Icons.event_outlined,
-          text: 'Được tiêu cuối tháng (dự kiến): ${formatVnd(freeEnd)}',
-          color: freeEnd < 0 ? Colors.red.shade700 : null,
+          style: body,
+          moneyStyle: MoneyStyle.body,
         ),
+      ],
+      if (details.isNotEmpty) const SizedBox(height: Space.s3),
+      for (var i = 0; i < details.length; i++)
+        Padding(
+          padding: EdgeInsets.only(top: i == 0 ? 0 : Space.s1),
+          child: Text(details[i], style: small),
+        ),
+      if (f.isLowConfidence && !lowConfidenceInDetails) ...[
+        const SizedBox(height: Space.s3),
+        const Pill('Ước tính sơ bộ'),
       ],
     ];
   }
@@ -130,38 +147,9 @@ class ForecastCard extends StatelessWidget {
       ),
       if (reason != null && reason != main)
         Padding(
-          padding: const EdgeInsets.only(top: 4),
+          padding: const EdgeInsets.only(top: Space.s1),
           child: Text(reason, style: theme.textTheme.bodySmall?.copyWith(color: muted)),
         ),
     ];
-  }
-}
-
-class _Fact extends StatelessWidget {
-  const _Fact({super.key, required this.icon, required this.text, this.color});
-
-  final IconData icon;
-  final String text;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: color ?? theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              text,
-              style: theme.textTheme.bodyMedium?.copyWith(color: color, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

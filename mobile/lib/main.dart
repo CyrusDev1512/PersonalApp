@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
@@ -17,21 +19,24 @@ import 'screens/manual_tx_screen.dart';
 import 'state/app_state.dart';
 import 'state/home_tabs.dart';
 import 'state/push_controller.dart';
+import 'theme/app_theme.dart';
+import 'theme/font_licenses.dart';
+import 'widgets/adaptive.dart';
+
+export 'theme/app_theme.dart' show buildTheme;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerFontLicenses();
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    // Vẽ dưới thanh trạng thái / thanh điều hướng (thanh trong suốt: theme/app_theme.dart).
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
   await initializeDateFormatting('vi_VN');
   Intl.defaultLocale = 'vi_VN';
   // Firebase chỉ được khởi tạo sau khi kết nối máy chủ; thiếu google-services.json thì push tự tắt.
   runApp(PersonalFinanceApp(push: FirebasePushService()));
 }
-
-/// Theme Material 3, màu chủ đạo teal.
-ThemeData buildTheme(Brightness brightness) => ThemeData(
-  useMaterial3: true,
-  colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: brightness),
-  inputDecorationTheme: const InputDecorationTheme(isDense: true),
-);
 
 /// Bọc nội dung app ngay dưới MaterialApp (quanh Navigator); [navigatorKey] là Navigator gốc của app.
 typedef AppShellBuilder = Widget Function(BuildContext context, Widget child, GlobalKey<NavigatorState> navigatorKey);
@@ -73,10 +78,13 @@ class PersonalFinanceApp extends StatefulWidget {
         };
         return MaterialPageRoute<bool>(
           settings: settings,
-          builder: (_) => GoalFormScreen(goal: goal),
+          builder: (_) => ContentColumn(child: GoalFormScreen(goal: goal)),
         );
       case ConnectScreen.routeName:
-        return MaterialPageRoute<bool>(settings: settings, builder: (_) => const ConnectScreen(popOnSuccess: true));
+        return MaterialPageRoute<bool>(
+          settings: settings,
+          builder: (_) => const ContentColumn(child: ConnectScreen(popOnSuccess: true)),
+        );
     }
     return null;
   }
@@ -129,9 +137,14 @@ class _PersonalFinanceAppState extends State<PersonalFinanceApp> {
     final shell = widget.shellBuilder;
     final app = MaterialApp(
       navigatorKey: _navigatorKey,
-      builder: shell == null
-          ? null
-          : (context, child) => shell(context, child ?? const SizedBox.shrink(), _navigatorKey),
+      builder: (context, child) {
+        final content = child ?? const SizedBox.shrink();
+        // Thanh hệ thống trong suốt, icon theo theme, cả ở màn không có app bar (Kết nối, thanh demo).
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: systemOverlayStyleFor(Theme.of(context).brightness),
+          child: shell == null ? content : shell(context, content, _navigatorKey),
+        );
+      },
       scaffoldMessengerKey: _messengerKey,
       title: 'Chi tiêu',
       debugShowCheckedModeBanner: false,
@@ -141,7 +154,10 @@ class _PersonalFinanceAppState extends State<PersonalFinanceApp> {
       supportedLocales: const [Locale('vi', 'VN'), Locale('en', 'US')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       home: const RootGate(),
-      routes: {HomeShell.routeName: (_) => const HomeShell(), ManualTxScreen.routeName: (_) => const ManualTxScreen()},
+      routes: {
+        HomeShell.routeName: (_) => const HomeShell(),
+        ManualTxScreen.routeName: (_) => const ContentColumn(child: ManualTxScreen()),
+      },
       onGenerateRoute: PersonalFinanceApp._onGenerateRoute,
     );
     return MultiProvider(
@@ -179,7 +195,7 @@ class _RootGateState extends State<RootGate> {
     if (!initialized) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (!connected) return const ConnectScreen();
+    if (!connected) return const ContentColumn(child: ConnectScreen());
     return const HomeShell();
   }
 }

@@ -140,7 +140,8 @@ FakeServer _server({Map<String, Object? Function(RecordedRequest req)> extra = c
 
 Future<(FakeServer, AppState)> _pump(
   WidgetTester tester, {
-  Size size = const Size(1080, 2600),
+  // Bố cục điện thoại / máy tính bảng dọc (< 840 dp: NavigationBar); cao để không phải cuộn.
+  Size size = const Size(800, 2600),
   Map<String, Object? Function(RecordedRequest req)> extra = const {},
 }) async {
   tester.view.physicalSize = size;

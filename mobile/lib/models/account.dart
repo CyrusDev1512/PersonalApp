@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart' show StringCharacters;
+
 import 'json_utils.dart';
 
 /// Tài khoản ngân hàng (hoặc ví tiền mặt `CASH`).
@@ -41,12 +43,19 @@ class Account {
   bool get balanceKnown => balance != null;
   bool get isCash => bank.toUpperCase() == 'CASH';
 
+  /// Chữ ngắn trên đĩa đầu hàng ("VCB", "MB"); tiền mặt dùng icon nên rỗng.
+  String get bankShort => switch (bank.toUpperCase()) {
+    'CASH' => '',
+    'OTHER' => name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+    final b => b.length > 3 ? b.substring(0, 3) : b,
+  };
+
   /// Nhãn ngân hàng tiếng Việt.
   String get bankLabel => bankLabelOf(bank);
 
-  /// "VCB chính · …6789".
+  /// "VCB chính ··6789" (DESIGN.md › Lists › Account row: ngân hàng / tên rồi 4 số cuối sau "··").
   String get displayName {
-    final tail = (last4 != null && last4!.isNotEmpty) ? ' · …$last4' : '';
+    final tail = (last4 != null && last4!.isNotEmpty) ? ' ··$last4' : '';
     final base = name.isNotEmpty ? name : bankLabel;
     return '$base$tail';
   }

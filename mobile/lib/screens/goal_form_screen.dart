@@ -4,9 +4,12 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
 import '../utils/currency.dart';
 import '../utils/dates.dart';
 import '../widgets/common.dart';
+import '../widgets/form_parts.dart';
 
 /// Tham số route của form mục tiêu: `goal == null` là thêm mới.
 class GoalFormArgs {
@@ -15,10 +18,19 @@ class GoalFormArgs {
   final GoalView? goal;
 }
 
-/// Cách xoá mục tiêu lặp lại.
+/// Cách xoá mục tiêu.
 enum _DeleteChoice { thisMonth, stopSeries }
 
-/// Form "Thêm mục tiêu" / "Sửa mục tiêu".
+/// Gợi ý tên cho mục tiêu mới: chạm thì điền tên, loại và danh mục (theo `system_key`) khi rõ ràng.
+const List<(String, String, String?)> _suggestions = [
+  ('Tiền trọ', GoalType.reserve, 'rent'),
+  ('Tiền ăn', GoalType.budget, 'food'),
+  ('Tiết kiệm', GoalType.reserve, null),
+];
+
+/// Form "Thêm mục tiêu" / "Sửa mục tiêu" (surfaces/goal-form/brief.md): loại mục tiêu trước (nó đổi nghĩa
+/// các ô còn lại), tên, số tiền, danh mục, tháng, lặp lại; "Đã chi trước khi dùng app" nằm trong
+/// "Thêm tuỳ chọn"; nút lưu dính ở đáy, nằm trên bàn phím.
 class GoalFormScreen extends StatefulWidget {
   const GoalFormScreen({super.key, this.goal});
 
@@ -35,11 +47,17 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
   late final TextEditingController _name;
   late final TextEditingController _amount;
   late final TextEditingController _openingSpent;
+  final _nameFocus = FocusNode();
+  final _amountFocus = FocusNode();
+  final _categoryFocus = FocusNode();
+  final _openingFocus = FocusNode();
   late String _type;
   int? _categoryId;
   late String _thisMonth;
   late String _month;
   late bool _repeat;
+  late bool _moreOptions;
+  late DateTime _now;
 
   /// Mục tiêu tháng này (để báo khi mục tiêu tháng sau nhập vào một chuỗi lặp lại sẵn có).
   List<GoalView> _thisMonthGoals = const [];
@@ -55,14 +73,16 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     super.initState();
     final g = widget.goal;
     final state = context.read<AppState>();
-    _thisMonth = state.summary?.month ?? currentMonthIct(state.now());
-    if (parseMonth(_thisMonth) == null) _thisMonth = currentMonthIct(state.now());
+    _now = state.now();
+    _thisMonth = state.summary?.month ?? currentMonthIct(_now);
+    if (parseMonth(_thisMonth) == null) _thisMonth = currentMonthIct(_now);
     _thisMonthGoals = state.summary?.goals ?? const [];
     _name = TextEditingController(text: g?.name ?? '');
     _amount = TextEditingController(text: g == null ? '' : formatGrouped(g.amount));
     _openingSpent = TextEditingController(
       text: (g == null || g.openingSpent == 0) ? '' : formatGrouped(g.openingSpent),
     );
+    _moreOptions = (g?.openingSpent ?? 0) > 0;
     _type = g?.type ?? GoalType.reserve;
     _categoryId = g?.categoryId;
     _month = g?.month ?? _thisMonth;
@@ -75,6 +95,10 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     _name.dispose();
     _amount.dispose();
     _openingSpent.dispose();
+    _nameFocus.dispose();
+    _amountFocus.dispose();
+    _categoryFocus.dispose();
+    _openingFocus.dispose();
     super.dispose();
   }
 
@@ -93,14 +117,65 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     }
   }
 
+  static String? _validateName(String? v) {
+    final s = v?.trim() ?? '';
+    if (s.isEmpty) return 'Nhập tên mục tiêu';
+    if (s.length > 80) return 'Tên tối đa 80 ký tự';
+    return null;
+  }
+
+  static String? _validateAmount(String? v) {
+    final amount = parseVnd(v);
+    if (amount == null) return 'Nhập số tiền';
+    if (amount <= 0) return 'Số tiền phải lớn hơn 0';
+    return null;
+  }
+
+  static String? _validateOpening(String? v) {
+    final spent = parseVnd(v);
+    if (spent != null && spent < 0) return 'Số tiền không được âm';
+    return null;
+  }
+
   String? _validateCategory(int? value) {
     if (_type == GoalType.budget && value == null) return 'Ngân sách chi tiêu cần chọn danh mục';
     return null;
   }
 
+  void _applySuggestion((String, String, String?) s) {
+    final (name, type, systemKey) = s;
+    setState(() {
+      _name.text = name;
+      _type = type;
+      if (systemKey == null) {
+        if (type == GoalType.reserve) _categoryId = null;
+      } else {
+        final match = _categories?.where((c) => c.systemKey == systemKey).toList() ?? const [];
+        if (match.length == 1) _categoryId = match.single.id;
+      }
+    });
+    _amountFocus.requestFocus();
+  }
+
+  /// Đưa con trỏ tới ô sai đầu tiên.
+  void _focusFirstInvalid() {
+    if (_validateName(_name.text) != null) {
+      _nameFocus.requestFocus();
+    } else if (_validateAmount(_amount.text) != null) {
+      _amountFocus.requestFocus();
+    } else if (_validateCategory(_categoryId) != null) {
+      _categoryFocus.requestFocus();
+    } else if (_moreOptions && _validateOpening(_openingSpent.text) != null) {
+      _openingFocus.requestFocus();
+    }
+  }
+
   Future<void> _save() async {
     FocusScope.of(context).unfocus();
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      _focusFirstInvalid();
+      return;
+    }
     final client = _client;
     if (client == null) return;
     final input = GoalInput(
@@ -125,14 +200,14 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
       final message = _editing
           ? 'Đã lưu mục tiêu'
           : _month != _thisMonth
-          ? 'Đã tạo mục tiêu cho ${monthLabel(_month).toLowerCase()}'
+          ? 'Đã tạo mục tiêu cho ${monthShortLabel(_month, _now).toLowerCase()}'
           : 'Đã thêm mục tiêu "${input.name}"';
       showInfo(context, message);
       Navigator.of(context).pop(true);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showError(context, e);
+      showInfo(context, e.isNetwork ? 'Không kết nối được máy chủ. Mục tiêu chưa được lưu.' : e.message);
     }
   }
 
@@ -140,26 +215,38 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     final goal = widget.goal;
     final client = _client;
     if (goal == null || client == null) return;
+    final scheme = Theme.of(context).colorScheme;
+    final destructive = AppButtonStyles.destructiveFilled(scheme);
     final choice = await showDialog<_DeleteChoice>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Xoá "${goal.name}"?'),
+        title: Text('Xoá "${goal.name}"?', maxLines: 2, overflow: TextOverflow.ellipsis),
         content: Text(
           goal.repeatMonthly
               ? 'Mục tiêu này lặp lại hằng tháng. Bạn muốn xoá thế nào?'
               : 'Mục tiêu ${shortMonthLabel(goal.month)} sẽ bị xoá.',
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Huỷ')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, _DeleteChoice.thisMonth),
-            child: const Text('Chỉ xoá tháng này'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, _DeleteChoice.stopSeries),
-            child: const Text('Xoá và dừng lặp lại'),
-          ),
-        ],
+        actions: goal.repeatMonthly
+            ? [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Huỷ')),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, _DeleteChoice.thisMonth),
+                  child: const Text('Chỉ xoá tháng này'),
+                ),
+                FilledButton(
+                  style: destructive,
+                  onPressed: () => Navigator.pop(ctx, _DeleteChoice.stopSeries),
+                  child: const Text('Xoá và dừng lặp lại'),
+                ),
+              ]
+            : [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Huỷ')),
+                FilledButton(
+                  style: destructive,
+                  onPressed: () => Navigator.pop(ctx, _DeleteChoice.thisMonth),
+                  child: const Text('Xoá'),
+                ),
+              ],
       ),
     );
     if (choice == null || !mounted) return;
@@ -181,12 +268,15 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final gutter = Gutter.of(context);
     final nextMonth = shiftMonth(_thisMonth, 1);
     final helper = _type == GoalType.budget
-        ? 'Hạn mức chi trong tháng, vd. tiền ăn 5.000.000đ. Mỗi khoản chi thuộc danh mục sẽ trừ dần; '
-              'phần chưa chi vẫn được giữ trong mức sàn.'
-        : 'Số tiền phải giữ lại trong tài khoản, vd. tiền trọ 3.000.000đ. Khi khoản chi thuộc danh mục '
-              'phát sinh (trả trọ), quỹ giảm tương ứng.';
+        ? 'Ngân sách chi tiêu: hạn mức chi trong tháng, vd. tiền ăn. Mỗi khoản chi thuộc danh mục trừ dần; '
+              'phần chưa chi vẫn được giữ.'
+        : 'Quỹ giữ: tiền phải giữ lại trong tài khoản, vd. tiền trọ. Khi trả (giao dịch thuộc danh mục), '
+              'quỹ giảm tương ứng.';
+    final muted = theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
 
     return Scaffold(
       appBar: AppBar(
@@ -195,140 +285,132 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
           if (_editing)
             IconButton(
               tooltip: 'Xoá mục tiêu',
+              color: scheme.error,
               onPressed: _saving ? null : _delete,
               icon: const Icon(Icons.delete_outline),
             ),
         ],
       ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-            children: [
-              TextFormField(
-                key: const Key('goal_name'),
-                controller: _name,
-                enabled: !_saving,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Tên mục tiêu',
-                  hintText: 'VD: Tiền trọ, Tiền ăn',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) {
-                  final s = v?.trim() ?? '';
-                  if (s.isEmpty) return 'Nhập tên mục tiêu';
-                  if (s.length > 80) return 'Tên tối đa 80 ký tự';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              Text('Loại mục tiêu', style: theme.textTheme.labelLarge),
-              const SizedBox(height: 6),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: GoalType.reserve, label: Text('Quỹ giữ'), icon: Icon(Icons.savings_outlined)),
-                  ButtonSegment(
-                    value: GoalType.budget,
-                    label: Text('Ngân sách chi tiêu'),
-                    icon: Icon(Icons.shopping_basket_outlined),
+      body: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(gutter, Space.s2, gutter, Space.s6),
+                children: [
+                  const FieldLabel('Loại mục tiêu'),
+                  AdaptiveSegmentedButton<String>(
+                    choices: const [
+                      SegmentChoice(GoalType.reserve, 'Quỹ giữ', icon: Icons.savings_outlined),
+                      SegmentChoice(GoalType.budget, 'Ngân sách', icon: Icons.shopping_basket_outlined),
+                    ],
+                    selected: _type,
+                    onChanged: _saving ? null : (v) => setState(() => _type = v),
                   ),
-                ],
-                selected: {_type},
-                onSelectionChanged: _saving
-                    ? null
-                    : (s) => setState(() {
-                        _type = s.first;
-                      }),
-              ),
-              const SizedBox(height: 6),
-              Text(helper, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 16),
-              TextFormField(
-                key: const Key('goal_amount'),
-                controller: _amount,
-                enabled: !_saving,
-                keyboardType: TextInputType.number,
-                inputFormatters: const [VndInputFormatter()],
-                decoration: const InputDecoration(labelText: 'Số tiền', suffixText: 'đ', border: OutlineInputBorder()),
-                validator: (v) {
-                  final amount = parseVnd(v);
-                  if (amount == null) return 'Nhập số tiền';
-                  if (amount <= 0) return 'Số tiền phải lớn hơn 0';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildCategoryField(),
-              const SizedBox(height: 16),
-              Text('Tháng', style: theme.textTheme.labelLarge),
-              const SizedBox(height: 6),
-              if (_editing)
-                Text(monthLabel(_month), style: theme.textTheme.bodyLarge)
-              else
-                SegmentedButton<String>(
-                  segments: [
-                    ButtonSegment(value: _thisMonth, label: Text('Tháng này (${shortMonthLabel(_thisMonth)})')),
-                    ButtonSegment(value: nextMonth, label: Text('Tháng sau (${shortMonthLabel(nextMonth)})')),
+                  const SizedBox(height: Space.s2),
+                  Text(helper, style: muted),
+                  const SizedBox(height: Space.s6),
+                  TextFormField(
+                    key: const Key('goal_name'),
+                    controller: _name,
+                    focusNode: _nameFocus,
+                    enabled: !_saving,
+                    textCapitalization: TextCapitalization.sentences,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(labelText: 'Tên mục tiêu', hintText: 'VD: Tiền trọ, Tiền ăn'),
+                    validator: _validateName,
+                  ),
+                  if (!_editing) ...[
+                    const SizedBox(height: Space.s2),
+                    Wrap(
+                      spacing: Space.s2,
+                      children: [
+                        for (final s in _suggestions)
+                          _SuggestionButton(label: s.$1, onPressed: _saving ? null : () => _applySuggestion(s)),
+                      ],
+                    ),
                   ],
-                  selected: {_month},
-                  onSelectionChanged: _saving ? null : (s) => setState(() => _month = s.first),
-                ),
-              if (_seriesForNextMonth case final series?) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'Tháng này đã có "${series.name}" lặp lại cùng loại và danh mục — mục tiêu '
-                  '${shortMonthLabel(_month)} của chuỗi đó sẽ được cập nhật thay vì tạo thêm.',
-                  key: const Key('goal_series_hint'),
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ],
-              const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Lặp lại hằng tháng'),
-                subtitle: Text(
-                  _editing
-                      ? 'Thay đổi áp dụng cho tháng này và các tháng sau'
-                      : 'Tự tạo lại mục tiêu này vào đầu mỗi tháng',
-                ),
-                value: _repeat,
-                onChanged: _saving ? null : (v) => setState(() => _repeat = v),
+                  const SizedBox(height: Space.s4),
+                  MoneyField(
+                    key: const Key('goal_amount'),
+                    controller: _amount,
+                    focusNode: _amountFocus,
+                    enabled: !_saving,
+                    label: 'Số tiền',
+                    validator: _validateAmount,
+                  ),
+                  const SizedBox(height: Space.s4),
+                  _buildCategoryField(theme),
+                  const SizedBox(height: Space.s6),
+                  const FieldLabel('Tháng'),
+                  if (_editing)
+                    Text(monthLabel(_month), style: theme.textTheme.bodyLarge)
+                  else
+                    AdaptiveSegmentedButton<String>(
+                      choices: [
+                        SegmentChoice(_thisMonth, monthShortLabel(_thisMonth, _now)),
+                        SegmentChoice(nextMonth, monthShortLabel(nextMonth, _now)),
+                      ],
+                      selected: _month,
+                      onChanged: _saving ? null : (v) => setState(() => _month = v),
+                    ),
+                  if (_seriesForNextMonth case final series?) ...[
+                    const SizedBox(height: Space.s2),
+                    Text(
+                      'Tháng này đã có "${series.name}" lặp lại cùng loại và danh mục, nên mục tiêu '
+                      '${shortMonthLabel(_month)} của chuỗi đó sẽ được cập nhật thay vì tạo thêm.',
+                      key: const Key('goal_series_hint'),
+                      style: muted,
+                    ),
+                  ],
+                  const SizedBox(height: Space.s2),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Lặp lại hằng tháng'),
+                    subtitle: Text(
+                      _editing ? 'Áp dụng cho tháng này và các tháng sau' : 'Tự tạo lại vào đầu mỗi tháng',
+                    ),
+                    value: _repeat,
+                    onChanged: _saving ? null : (v) => setState(() => _repeat = v),
+                  ),
+                  const SizedBox(height: Space.s2),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton.icon(
+                      key: const Key('goal_more_options'),
+                      onPressed: () => setState(() => _moreOptions = !_moreOptions),
+                      icon: Icon(_moreOptions ? Icons.expand_less : Icons.expand_more),
+                      label: Text(_moreOptions ? 'Ẩn tuỳ chọn' : 'Thêm tuỳ chọn'),
+                    ),
+                  ),
+                  if (_moreOptions) ...[
+                    const SizedBox(height: Space.s2),
+                    MoneyField(
+                      key: const Key('goal_opening_spent'),
+                      controller: _openingSpent,
+                      focusNode: _openingFocus,
+                      enabled: !_saving,
+                      label: 'Đã chi trước khi dùng app (tuỳ chọn)',
+                      hint: 'VD: 500.000',
+                      helper:
+                          'Số đã chi cho mục tiêu này trong tháng trước khi bắt đầu dùng app; chỉ tính cho tháng '
+                          'đầu tiên.',
+                      validator: _validateOpening,
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(height: 8),
-              TextFormField(
-                key: const Key('goal_opening_spent'),
-                controller: _openingSpent,
-                enabled: !_saving,
-                keyboardType: TextInputType.number,
-                inputFormatters: const [VndInputFormatter()],
-                decoration: const InputDecoration(
-                  labelText: 'Đã chi trước khi dùng app (tuỳ chọn)',
-                  helperText:
-                      'Số đã chi cho mục tiêu này trong tháng trước khi bắt đầu dùng app; '
-                      'chỉ tính cho tháng đầu tiên.',
-                  helperMaxLines: 3,
-                  suffixText: 'đ',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) {
-                  final spent = parseVnd(v);
-                  if (spent != null && spent < 0) return 'Số tiền không được âm';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
+            ),
+            StickyActionBar(
+              primary: FilledButton.icon(
                 key: const Key('goal_save'),
                 onPressed: _saving ? null : _save,
-                icon: _saving
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.check),
+                icon: _saving ? const BusyIcon() : null,
                 label: Text(_editing ? 'Lưu thay đổi' : 'Tạo mục tiêu'),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -344,18 +426,29 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     return null;
   }
 
-  Widget _buildCategoryField() {
+  Widget _buildCategoryField(ThemeData theme) {
     final categories = _categories;
     if (categories == null) {
-      if (_categoriesError != null) {
-        return Row(
-          children: [
-            Expanded(child: Text('Không tải được danh mục: $_categoriesError')),
-            TextButton(onPressed: _loadCategories, child: const Text('Thử lại')),
-          ],
-        );
-      }
-      return const LinearProgressIndicator();
+      final failed = _categoriesError != null;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButtonFormField<int?>(
+            items: const [],
+            onChanged: null,
+            decoration: InputDecoration(
+              labelText: 'Danh mục',
+              helperText: failed ? 'Không tải được danh mục.' : 'Đang tải danh mục…',
+              helperStyle: failed ? theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error) : null,
+            ),
+          ),
+          if (failed)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton(onPressed: _loadCategories, child: const Text('Thử lại')),
+            ),
+        ],
+      );
     }
     final allowNone = _type == GoalType.reserve;
     // Danh mục hiện tại có thể không còn trong danh sách (đã đổi kind…) → vẫn giữ để không lỗi Dropdown.
@@ -364,14 +457,13 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
     return DropdownButtonFormField<int?>(
       key: ValueKey('goal_category_$_type'),
       initialValue: value,
+      focusNode: _categoryFocus,
       isExpanded: true,
       decoration: InputDecoration(
         labelText: 'Danh mục',
         helperText: allowNone
             ? 'Để "Tiết kiệm thuần" nếu chỉ muốn giữ tiền, không gắn khoản chi nào'
             : 'Khoản chi thuộc danh mục này sẽ trừ vào ngân sách',
-        helperMaxLines: 2,
-        border: const OutlineInputBorder(),
       ),
       items: [
         if (allowNone)
@@ -387,6 +479,30 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
       ],
       validator: _validateCategory,
       onChanged: _saving ? null : (v) => setState(() => _categoryId = v),
+    );
+  }
+}
+
+/// Gợi ý tên dạng chip (nút thật: đọc màn hình là "nút", không phải ô đánh dấu).
+class _SuggestionButton extends StatelessWidget {
+  const _SuggestionButton({required this.label, this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: scheme.onSurfaceVariant,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.sm)),
+        minimumSize: const Size(0, 32),
+        padding: const EdgeInsets.symmetric(horizontal: Space.s3),
+        tapTargetSize: MaterialTapTargetSize.padded,
+      ),
+      child: Text(label),
     );
   }
 }

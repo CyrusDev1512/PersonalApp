@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
+import '../theme/app_theme.dart';
 import '../utils/currency.dart';
 import 'demo_backend.dart';
 
@@ -9,14 +12,14 @@ import 'demo_backend.dart';
 const String demoEmojiFontFamily = 'Noto Color Emoji';
 const String demoSymbolsFontFamily = 'DejaVu Sans';
 
-/// Thêm font emoji / ký hiệu nạp sẵn vào danh sách font dự phòng của theme.
-ThemeData withDemoFontFallback(ThemeData theme) {
-  const fallback = [demoEmojiFontFamily, demoSymbolsFontFamily];
-  return theme.copyWith(
-    textTheme: theme.textTheme.apply(fontFamilyFallback: fallback),
-    primaryTextTheme: theme.primaryTextTheme.apply(fontFamilyFallback: fallback),
-  );
-}
+final Map<Brightness, ThemeData> _demoThemes = {};
+
+/// Theme của app với font emoji / ký hiệu nạp sẵn làm font dự phòng cho MỌI kiểu chữ (cả kiểu chữ của
+/// component theme: ô danh sách, SnackBar, chip…), để engine web không đi tải font dự phòng.
+ThemeData withDemoFontFallback(ThemeData theme) => _demoThemes.putIfAbsent(
+  theme.brightness,
+  () => buildTheme(theme.brightness, fontFamilyFallback: const [demoEmojiFontFamily, demoSymbolsFontFamily]),
+);
 
 /// Bọc app của bản dùng thử: thanh "Bản dùng thử · dữ liệu giả" + nút giả lập ở trên cùng.
 class DemoShell extends StatelessWidget {
@@ -38,19 +41,12 @@ class DemoShell extends StatelessWidget {
   /// Tiêu đề trang (MaterialApp đặt "Chi tiêu"; Title bên trong dựng sau nên ghi đè).
   static const String pageTitle = 'Chi tiêu (bản demo)';
 
-  /// Màn hình rộng hơn mức này (máy tính, máy tính bảng ngang) thì app hiện thành một cột cỡ điện thoại ở giữa.
-  static const double wideBreakpoint = 600;
-
-  /// Bề rộng cột "điện thoại" trên màn hình rộng.
-  static const double phoneWidth = 440;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final media = MediaQuery.of(context);
-    final wide = media.size.width > wideBreakpoint;
-    // Builder để MediaQuery.removePadding đọc đúng MediaQuery (đã thu hẹp khi màn hình rộng).
-    Widget column = Builder(
+    // Màn hình rộng: thanh demo trải hết bề ngang; app tự đổi sang NavigationRail và cột nội dung tối đa 720 dp
+    // (HomeShell), bảng trượt tối đa 640 dp (theme) thay vì thu cả app về một cột cỡ điện thoại.
+    final column = Builder(
       builder: (context) => Column(
         children: [
           DemoBanner(backend: backend, navigatorKey: navigatorKey, onReconnect: onReconnect),
@@ -64,28 +60,6 @@ class DemoShell extends StatelessWidget {
         ],
       ),
     );
-    if (wide) {
-      // App được thiết kế cho điện thoại: trên màn hình rộng giữ cỡ điện thoại thay vì kéo giãn cả màn hình.
-      // MediaQuery cũng báo bề rộng của cột để hộp thoại, bảng trượt và SnackBar nằm gọn trong cột.
-      final scheme = theme.colorScheme;
-      column = ColoredBox(
-        color: scheme.surfaceContainerHighest,
-        child: Center(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border.symmetric(vertical: BorderSide(color: scheme.outlineVariant)),
-            ),
-            child: SizedBox(
-              width: phoneWidth,
-              child: MediaQuery(
-                data: media.copyWith(size: Size(phoneWidth, media.size.height)),
-                child: column,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
     return Title(
       title: pageTitle,
       color: theme.colorScheme.primary,
@@ -219,8 +193,22 @@ class _DemoBannerState extends State<DemoBanner> {
             builder: (context, constraints) {
               final narrow = constraints.maxWidth < 460;
               // Nhãn chỉ chiếm phần nó cần (tối đa [maxLabel]); nút lấy phần còn lại, thiếu chỗ thì rút gọn chữ.
-              // Khi ngắt kết nối, nút "Kết nối lại" ngắn hơn nên nhãn được rộng hơn để đủ chỗ cho "đã ngắt kết nối".
-              final maxLabel = narrow ? (connected ? 112.0 : 156.0) : 280.0;
+              // Màn hẹp: nhãn hai dòng, rộng bằng dòng dài nhất đo theo font thật (icon 18 + khoảng 8), để không
+              // bao giờ mất chữ "dữ liệu giả" / "đã ngắt kết nối".
+              double lineWidth(String line) {
+                final painter = TextPainter(
+                  text: TextSpan(text: line, style: labelStyle),
+                  textDirection: Directionality.of(context),
+                  textScaler: MediaQuery.textScalerOf(context),
+                  maxLines: 1,
+                )..layout();
+                final width = painter.width;
+                painter.dispose();
+                return width;
+              }
+
+              final lines = ['Bản dùng thử', if (connected) 'dữ liệu giả' else 'đã ngắt kết nối'];
+              final maxLabel = narrow ? 18 + 8 + lines.map(lineWidth).reduce(math.max) + 1 : 280.0;
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [

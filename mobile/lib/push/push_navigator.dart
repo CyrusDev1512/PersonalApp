@@ -7,7 +7,8 @@ import '../models/models.dart';
 import '../screens/tx_action_sheet.dart';
 import '../state/app_state.dart';
 import '../state/home_tabs.dart';
-import '../utils/dates.dart';
+import '../utils/text.dart';
+import '../widgets/alert_detail_sheet.dart';
 import 'push_service.dart';
 
 /// Xử lý thông báo đẩy ở tầng app (ngoài mọi màn hình):
@@ -30,14 +31,37 @@ class PushNavigator {
     unawaited(state.load());
     final messenger = messengerKey.currentState;
     if (messenger == null) return;
-    final lines = [?message.title, ?message.body];
+    // Gọn: tiêu đề + dòng đầu của nội dung (mỗi dòng tối đa 1 hàng); đầy đủ thì bấm "Xem". Emoji đầu tiêu đề
+    // (soạn cho Telegram) bỏ đi như ở tab Cảnh báo.
+    final title = stripLeadingEmoji(message.title?.trim() ?? '');
+    final firstLine = (message.body ?? '').trim().split('\n').first.trim();
+    final heading = title.isNotEmpty ? title : (firstLine.isNotEmpty ? firstLine : 'Có cảnh báo mới');
+    final detail = title.isNotEmpty ? firstLine : '';
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           key: const Key('push_snackbar'),
-          content: Text(lines.isEmpty ? 'Có cảnh báo mới' : lines.join('\n')),
-          duration: const Duration(seconds: 8),
+          content: Builder(
+            builder: (context) {
+              final style = DefaultTextStyle.of(context).style;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    heading,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: style.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  if (detail.isNotEmpty) Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              );
+            },
+          ),
+          // DESIGN.md › Snackbars: 6 s khi có nút.
+          duration: const Duration(seconds: 6),
           persist: false,
           action: SnackBarAction(label: 'Xem', onPressed: () => unawaited(handleOpened(message))),
         ),
@@ -85,26 +109,8 @@ class PushNavigator {
     final shown = alert;
     final context = _context;
     if (shown == null || context == null || !context.mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        key: const Key('push_alert_dialog'),
-        title: Text(shown.title.isEmpty ? shown.level.label : shown.title),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (shown.createdAt != null)
-                Text(formatDateTime(shown.createdAt!), style: Theme.of(ctx).textTheme.bodySmall),
-              const SizedBox(height: 8),
-              SelectableText(shown.message),
-            ],
-          ),
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Đóng'))],
-      ),
-    );
+    // Cùng bảng chi tiết với tab Cảnh báo (nút "Xem giao dịch" / "Xem mục tiêu" theo ngữ cảnh).
+    await showAlertDetail(context, client: client, alert: shown, key: const Key('push_alert_dialog'));
   }
 
   Future<void> _markRead(ApiClient client, int alertId) async {

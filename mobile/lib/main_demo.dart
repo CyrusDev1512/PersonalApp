@@ -10,11 +10,13 @@ import 'package:intl/intl.dart';
 
 import 'demo/demo_app.dart';
 import 'demo/demo_controls.dart';
+import 'theme/font_licenses.dart';
 
 /// Font đi kèm bản web (scripts/build_web_demo.sh chép vào build/web/fonts/): nạp trước runApp để engine
-/// không phải tải font dự phòng (emoji, ký hiệu) từ fonts.gstatic.com. Roboto Regular đầy đủ đã được
-/// `flutter build web --no-web-resources-cdn` đóng gói sẵn (assets/fonts/fallback/, khai báo trong FontManifest),
-/// ở đây chỉ thêm các độ đậm Medium/Bold dùng cho tiêu đề, nút, số tiền.
+/// không phải tải font dự phòng (emoji, ký hiệu) từ fonts.gstatic.com. Font chính của app (Be Vietnam Pro)
+/// nằm trong FontManifest (pubspec.yaml) nên engine tự nạp; Roboto Regular đầy đủ đã được
+/// `flutter build web --no-web-resources-cdn` đóng gói sẵn (assets/fonts/fallback/), ở đây thêm Medium/Bold
+/// cho chữ dự phòng.
 const List<(String, String)> demoFonts = [
   ('Roboto', 'fonts/Roboto-Medium.ttf'),
   ('Roboto', 'fonts/Roboto-Bold.ttf'),
@@ -27,6 +29,7 @@ const List<(String, String)> demoFonts = [
 /// Build: `scripts/build_web_demo.sh` (flutter build web -t lib/main_demo.dart).
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerFontLicenses();
   await initializeDateFormatting('vi_VN');
   Intl.defaultLocale = 'vi_VN';
   if (kIsWeb) {

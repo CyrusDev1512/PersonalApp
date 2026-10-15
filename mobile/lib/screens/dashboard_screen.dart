@@ -4,26 +4,26 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
-import '../utils/currency.dart';
+import '../theme/status_colors.dart';
+import '../theme/tokens.dart';
 import '../utils/dates.dart';
 import '../widgets/account_dialog.dart';
-import '../widgets/alert_tile.dart';
+import '../widgets/account_row.dart';
+import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
 import '../widgets/forecast_card.dart';
-import '../widgets/goal_card.dart';
-import '../widgets/status_banner.dart';
+import '../widgets/goal_row.dart';
+import '../widgets/list_group.dart';
+import '../widgets/status_hero.dart';
 import 'goal_form_screen.dart';
 
-/// Số dư cũ hơn ngưỡng này thì "cập nhật lúc …" chuyển màu hổ phách.
-const Duration staleBalanceAfter = Duration(hours: 48);
-
-/// Màn "Tổng quan".
+/// Màn "Tổng quan" (surfaces/dashboard/brief.md): status hero trước tiên (trạng thái, số được tiêu, thước mức
+/// sàn), rồi "Cần bạn xem", "Dự báo cuối tháng", mục tiêu của tháng và tài khoản.
 class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key, this.onOpenUncategorized, this.onOpenAlerts});
+  const DashboardScreen({super.key, this.onOpenUncategorized});
 
-  /// Chạm chip "chưa phân loại" → tab Giao dịch đã lọc.
+  /// Chạm hàng "… giao dịch chưa phân loại" → tab Giao dịch đã lọc.
   final VoidCallback? onOpenUncategorized;
-  final VoidCallback? onOpenAlerts;
 
   static Future<void> openGoalForm(BuildContext context, {GoalView? goal}) async {
     await Navigator.of(context).pushNamed(GoalFormScreen.routeName, arguments: GoalFormArgs(goal: goal));
@@ -33,311 +33,64 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final summary = state.summary;
+    // Chưa có số liệu nào vì lỗi tải: "Thử lại" là hành động của màn hình, FAB ẩn (không vô hiệu hoá).
+    final noData = summary == null && state.error != null;
 
     Widget body;
     if (summary == null) {
-      if (state.error != null && !state.loading) {
-        body = ErrorView(message: state.errorMessage!, onRetry: state.load);
-      } else {
-        body = const Center(child: CircularProgressIndicator());
-      }
+      body = noData && !state.loading
+          ? ErrorView(title: 'Không tải được tổng quan', message: state.errorMessage!, onRetry: state.load)
+          : const _DashboardSkeleton();
     } else {
       body = RefreshIndicator(
         onRefresh: state.load,
-        child: _DashboardBody(
-          summary: summary,
-          state: state,
-          onOpenUncategorized: onOpenUncategorized,
-          onOpenAlerts: onOpenAlerts,
-        ),
+        child: _DashboardBody(summary: summary, state: state, onOpenUncategorized: onOpenUncategorized),
       );
     }
 
+    // Cửa sổ rộng: FAB nằm ở đầu NavigationRail (HomeShell), không hiện thêm ở đây.
+    final showFab = !ShellScope.primaryActionInRailOf(context) && !noData;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tổng quan'),
-        actions: [
-          IconButton(tooltip: 'Tải lại', onPressed: state.loading ? null : state.load, icon: const Icon(Icons.refresh)),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Tổng quan')),
       body: body,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: state.isConnected ? () => openGoalForm(context) : null,
-        icon: const Icon(Icons.add),
-        label: const Text('Thêm mục tiêu'),
-      ),
+      floatingActionButton: showFab
+          ? FloatingActionButton.extended(
+              onPressed: () => openGoalForm(context),
+              icon: const Icon(Icons.add),
+              label: const Text('Thêm mục tiêu'),
+            )
+          : null,
+    );
+  }
+}
+
+/// Khung xương tĩnh khi tải lần đầu: khối hero và ba hàng (không spinner, không shimmer).
+class _DashboardSkeleton extends StatelessWidget {
+  const _DashboardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final gutter = Gutter.of(context);
+    return ListView(
+      padding: EdgeInsets.fromLTRB(gutter, Space.s2, gutter, AppLayout.fabClearance),
+      children: const [
+        StatusHeroSkeleton(),
+        SizedBox(height: AppLayout.sectionGap),
+        ListSkeleton(rows: 3),
+      ],
     );
   }
 }
 
 class _DashboardBody extends StatelessWidget {
-  const _DashboardBody({required this.summary, required this.state, this.onOpenUncategorized, this.onOpenAlerts});
+  const _DashboardBody({required this.summary, required this.state, this.onOpenUncategorized});
 
   final Summary summary;
   final AppState state;
   final VoidCallback? onOpenUncategorized;
-  final VoidCallback? onOpenAlerts;
 
-  @override
-  Widget build(BuildContext context) {
-    final client = state.client;
-    final needsBalance = summary.level == Level.unknown || summary.accountsMissingBalance.isNotEmpty;
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      children: [
-        if (state.error != null) _OfflineBanner(error: state.error!, lastLoadedAt: state.lastLoadedAt),
-        _BalanceCard(summary: summary, now: state.now()),
-        const SizedBox(height: 12),
-        StatusBanner(level: summary.level, reason: summary.levelReason, waitingIncome: summary.waitingIncome),
-        if (ForecastCard.shouldShow(summary.forecast)) ...[
-          const SizedBox(height: 12),
-          ForecastCard(forecast: summary.forecast, month: summary.month),
-        ],
-        if (needsBalance && client != null) ...[
-          const SizedBox(height: 12),
-          _UnknownBalanceCard(summary: summary, client: client, onSaved: state.load),
-        ],
-        if (client != null)
-          for (final account in summary.unconfirmedAccounts)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: _NewAccountCard(account: account, client: client, onSaved: state.load),
-            ),
-        if (summary.ingestHealth.hasProblems) ...[
-          const SizedBox(height: 12),
-          _IngestHealthNote(health: summary.ingestHealth),
-        ],
-        if (summary.uncategorizedCount > 0) ...[
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: ActionChip(
-              key: const Key('uncategorized_chip'),
-              avatar: const Icon(Icons.label_off_outlined, size: 18),
-              label: Text('${summary.uncategorizedCount} giao dịch chưa phân loại'),
-              onPressed: onOpenUncategorized,
-            ),
-          ),
-        ],
-        SectionHeader('Mục tiêu ${monthLabel(summary.month).toLowerCase()}'),
-        if (summary.goals.isEmpty)
-          const _EmptyGoals()
-        else
-          for (final goal in summary.goals)
-            GoalCard(
-              goal: goal,
-              onTap: () => DashboardScreen.openGoalForm(context, goal: goal),
-            ),
-        if (state.nextMonthGoals.isNotEmpty) ...[
-          SectionHeader('Mục tiêu tháng sau (${shortMonthLabel(state.nextMonth ?? shiftMonth(summary.month, 1))})'),
-          _NextMonthGoals(goals: state.nextMonthGoals),
-        ],
-        SectionHeader(
-          'Cảnh báo gần đây',
-          trailing: TextButton(onPressed: onOpenAlerts, child: const Text('Xem tất cả')),
-        ),
-        if (summary.latestAlerts.isEmpty)
-          const Padding(padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8), child: Text('Chưa có cảnh báo nào.'))
-        else
-          Card(
-            child: Column(
-              children: [
-                for (final alert in summary.latestAlerts.take(5))
-                  AlertTile(alert: alert, dense: true, onTap: onOpenAlerts),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _OfflineBanner extends StatelessWidget {
-  const _OfflineBanner({required this.error, this.lastLoadedAt});
-
-  final ApiException error;
-  final DateTime? lastLoadedAt;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final title = error.isNetwork ? 'Đang offline — không kết nối được máy chủ' : error.message;
-    final when = lastLoadedAt == null
-        ? 'Chưa tải được dữ liệu lần nào.'
-        : 'Đang hiện dữ liệu tải lúc ${formatShortDateTime(lastLoadedAt!)}.';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        key: const Key('offline_banner'),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: scheme.errorContainer, borderRadius: BorderRadius.circular(12)),
-        child: Row(
-          children: [
-            Icon(error.isNetwork ? Icons.cloud_off : Icons.error_outline, color: scheme.onErrorContainer),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(color: scheme.onErrorContainer, fontWeight: FontWeight.w600),
-                  ),
-                  Text(when, style: TextStyle(color: scheme.onErrorContainer)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BalanceCard extends StatelessWidget {
-  const _BalanceCard({required this.summary, required this.now});
-
-  final Summary summary;
-  final DateTime now;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final asOf = summary.balanceAsOf;
-    final stale = asOf != null && now.difference(asOf) > staleBalanceAfter;
-    final staleColor = Colors.amber.shade800;
-    final free = summary.free;
-    final freeColor = free == null
-        ? null
-        : free < 0
-        ? Colors.red.shade700
-        : levelColor(summary.level == Level.unknown ? Level.ok : summary.level);
-    final income = summary.expectedIncome;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text('Tổng số dư', style: theme.textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant)),
-                if (summary.anyBalanceDerived) ...[
-                  const SizedBox(width: 8),
-                  Tooltip(
-                    message: 'Có tài khoản đang dùng số dư tự cộng/trừ từ mốc gần nhất',
-                    child: StatusBadge('ước tính', color: scheme.secondary),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              summary.balanceKnown ? formatVndOrDash(summary.balance) : 'Chưa biết',
-              key: const Key('total_balance'),
-              style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 2),
-            if (asOf != null)
-              Row(
-                children: [
-                  if (stale) ...[Icon(Icons.schedule, size: 16, color: staleColor), const SizedBox(width: 4)],
-                  Flexible(
-                    child: Text(
-                      'cập nhật lúc ${formatShortDateTime(asOf)}${stale ? ' (đã hơn 48 giờ)' : ''}',
-                      key: const Key('balance_as_of'),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: stale ? staleColor : scheme.onSurfaceVariant,
-                        fontWeight: stale ? FontWeight.w600 : null,
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            else
-              Text('chưa có thông tin số dư', style: theme.textTheme.bodySmall),
-            const Divider(height: 24),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _Metric(
-                    label: 'Mức sàn',
-                    value: formatVnd(summary.floor),
-                    hint: 'Tổng tiền còn phải giữ cho mục tiêu',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _Metric(
-                    label: 'Được tiêu thoải mái',
-                    value: formatVndOrDash(free),
-                    color: freeColor,
-                    hint: summary.buffer > 0 ? 'Cảnh báo khi dưới ${formatVnd(summary.buffer)}' : null,
-                  ),
-                ),
-              ],
-            ),
-            if (summary.inTransit > 0) ...[
-              const SizedBox(height: 8),
-              Text('Đang chuyển giữa các TK: ${formatVnd(summary.inTransit)}', style: theme.textTheme.bodySmall),
-            ],
-            if (income != null && income.pending > 0) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Lương chờ nhận: ${formatVnd(income.pending)}${income.day > 0 ? ' (ngày ${income.day})' : ''}',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-            if (summary.daysLeft != null) ...[
-              const SizedBox(height: 4),
-              Text('Còn ${summary.daysLeft} ngày trong tháng', style: theme.textTheme.bodySmall),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value, this.color, this.hint});
-
-  final String label;
-  final String value;
-  final Color? color;
-  final String? hint;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, color: color),
-        ),
-        if (hint != null) Text(hint!, style: theme.textTheme.bodySmall),
-      ],
-    );
-  }
-}
-
-/// UNKNOWN: chưa biết số dư → nút "Nhập số dư".
-class _UnknownBalanceCard extends StatelessWidget {
-  const _UnknownBalanceCard({required this.summary, required this.client, required this.onSaved});
-
-  final Summary summary;
-  final ApiClient client;
-  final Future<void> Function() onSaved;
-
-  Future<void> _enter(BuildContext context) async {
+  /// Hero UNKNOWN / hàng "Chưa biết số dư": mở bảng nhập số dư (TK đầu tiên thiếu số dư) hoặc thêm tài khoản.
+  Future<void> _enterBalance(BuildContext context, ApiClient client) async {
     final missing = summary.accountsMissingBalance;
     bool saved;
     if (missing.isNotEmpty) {
@@ -346,51 +99,192 @@ class _UnknownBalanceCard extends StatelessWidget {
       final result = await showAccountForm(context, client: client);
       saved = result?.account != null;
     }
-    if (saved) await onSaved();
+    if (saved) await state.load();
+  }
+
+  Future<void> _openAccount(BuildContext context, ApiClient client, Account account) async {
+    final saved = await showBalanceDialog(context, client: client, account: account);
+    if (saved != null) await state.load();
+  }
+
+  BudgetPace? _paceFor(GoalView goal) {
+    for (final b in summary.forecast?.budgets ?? const <BudgetPace>[]) {
+      if (b.goalId == goal.id) return b;
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
+    final client = state.client;
+    final now = state.now();
+    final gutter = Gutter.of(context);
+    final error = state.error;
     final missing = summary.accountsMissingBalance;
-    final text = missing.isEmpty
-        ? 'Chưa có tài khoản nào có số dư. Thêm tài khoản và nhập số dư hiện tại để app tính được mức an toàn.'
-        : 'Chưa biết số dư của: ${missing.map((a) => a.displayName).join(', ')}. '
-              'Nhập số dư hiện tại để app bắt đầu tính.';
-    return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(text),
-            const SizedBox(height: 10),
-            FilledButton.icon(
-              key: const Key('enter_balance'),
-              onPressed: () => _enter(context),
-              icon: const Icon(Icons.account_balance_wallet_outlined),
-              label: const Text('Nhập số dư'),
-            ),
-          ],
+
+    final reviewRows = <Widget>[
+      if (summary.uncategorizedCount > 0)
+        _UncategorizedRow(count: summary.uncategorizedCount, onTap: onOpenUncategorized),
+      if (client != null)
+        for (final account in summary.unconfirmedAccounts)
+          _NewAccountRow(key: ValueKey('new_account_${account.id}'), account: account, client: client, onSaved: state.load),
+      if (client != null && summary.level != Level.unknown && missing.isNotEmpty)
+        _MissingBalanceRow(accounts: missing, onEnter: () => _enterBalance(context, client)),
+      if (summary.ingestHealth.hasProblems) _IngestHealthRow(health: summary.ingestHealth),
+    ];
+
+    final goalsHeading = 'Mục tiêu ${monthShortLabel(summary.month, now).toLowerCase()}';
+    final nextGoals = state.nextMonthGoals;
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(gutter, Space.s2, gutter, AppLayout.fabClearance),
+      children: [
+        if (error != null) ...[
+          OfflineStrip(
+            key: const Key('offline_banner'),
+            icon: error.isNetwork ? Icons.cloud_off : Icons.sync_problem,
+            title: error.isNetwork ? 'Đang offline, không kết nối được máy chủ' : error.message,
+            message: state.lastLoadedAt == null
+                ? null
+                : 'Đang hiện số liệu tải lúc ${formatShortDateTimeIct(state.lastLoadedAt!)}.',
+            onRetry: state.loading ? null : state.load,
+          ),
+          const SizedBox(height: AppLayout.groupGap),
+        ],
+        StatusHero(
+          key: const ValueKey('dashboard_hero'),
+          data: StatusHeroData.fromSummary(summary, offline: state.offline, dataLoadedAt: state.lastLoadedAt),
+          now: now,
+          onUnknownAction: client == null ? null : () => _enterBalance(context, client),
+        ),
+        if (reviewRows.isNotEmpty) ...[
+          const SectionHeader('Cần bạn xem'),
+          ListGroup(children: reviewRows),
+        ],
+        if (ForecastCard.shouldShow(summary.forecast)) ...[
+          const SectionHeader('Dự báo cuối tháng'),
+          ForecastCard(forecast: summary.forecast, month: summary.month),
+        ],
+        SectionHeader(goalsHeading),
+        if (summary.goals.isEmpty)
+          _EmptyGoals(monthLabel: monthShortLabel(summary.month, now).toLowerCase())
+        else
+          ListGroup(
+            children: [
+              for (final goal in summary.goals)
+                GoalRow(
+                  goal: goal,
+                  pace: _paceFor(goal),
+                  onTap: () => DashboardScreen.openGoalForm(context, goal: goal),
+                ),
+            ],
+          ),
+        if (nextGoals.isNotEmpty) ...[
+          const SizedBox(height: AppLayout.groupGap),
+          _NextMonthGoals(
+            key: const Key('next_month_goals'),
+            month: state.nextMonth ?? shiftMonth(summary.month, 1),
+            goals: nextGoals,
+            now: now,
+          ),
+        ],
+        if (summary.accounts.isNotEmpty) ...[
+          const SectionHeader('Tài khoản'),
+          ListGroup(
+            children: [
+              for (final account in summary.accounts)
+                AccountRow(
+                  account: account,
+                  now: now,
+                  onTap: client == null ? null : () => _openAccount(context, client, account),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Hàng "3 giao dịch chưa phân loại" → tab Giao dịch đã lọc. Là một nút (không phải chip / ô đánh dấu).
+class _UncategorizedRow extends StatelessWidget {
+  const _UncategorizedRow({required this.count, this.onTap});
+
+  final int count;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final title = '$count giao dịch chưa phân loại';
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        child: ListTile(
+          key: const Key('uncategorized_chip'),
+          leading: LeadingDisc(
+            icon: Icons.label_outline,
+            background: scheme.primaryContainer,
+            foreground: scheme.onPrimaryContainer,
+          ),
+          title: Text(title),
+          subtitle: const Text('Phân loại để mục tiêu và dự báo tính đúng'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onTap,
         ),
       ),
     );
   }
 }
 
-/// TK lạ tự phát hiện: hỏi 1 lần có tính vào tổng không.
-class _NewAccountCard extends StatefulWidget {
-  const _NewAccountCard({required this.account, required this.client, required this.onSaved});
+/// Một hàng có câu hỏi và nút trả lời ngay dưới câu (giữ thẳng hàng với chữ, không bóp chữ khi chữ lớn).
+class _ReviewRow extends StatelessWidget {
+  const _ReviewRow({super.key, required this.leading, required this.text, required this.actions});
+
+  final Widget leading;
+  final String text;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppLayout.listRowPaddingH, vertical: Space.s3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          leading,
+          const SizedBox(width: Space.s4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(text, style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface)),
+                const SizedBox(height: Space.s2),
+                Wrap(spacing: Space.s2, runSpacing: Space.s2, children: actions),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// TK lạ tự phát hiện: hỏi một lần có tính vào tổng số dư không (trả lời ngay trong hàng).
+class _NewAccountRow extends StatefulWidget {
+  const _NewAccountRow({super.key, required this.account, required this.client, required this.onSaved});
 
   final Account account;
   final ApiClient client;
   final Future<void> Function() onSaved;
 
   @override
-  State<_NewAccountCard> createState() => _NewAccountCardState();
+  State<_NewAccountRow> createState() => _NewAccountRowState();
 }
 
-class _NewAccountCardState extends State<_NewAccountCard> {
+class _NewAccountRowState extends State<_NewAccountRow> {
   bool _busy = false;
 
   Future<void> _answer(bool include) async {
@@ -408,127 +302,155 @@ class _NewAccountCardState extends State<_NewAccountCard> {
   @override
   Widget build(BuildContext context) {
     final a = widget.account;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Phát hiện TK mới ${a.bankLabel} …${a.last4 ?? ''} — tính vào tổng số dư?'),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                FilledButton(onPressed: _busy ? null : () => _answer(true), child: const Text('Tính vào tổng')),
-                OutlinedButton(onPressed: _busy ? null : () => _answer(false), child: const Text('Không tính')),
-              ],
-            ),
-          ],
-        ),
-      ),
+    return _ReviewRow(
+      leading: a.isCash ? const LeadingDisc(icon: Icons.payments_outlined) : LeadingDisc(text: a.bankShort),
+      text: 'Phát hiện TK mới ${a.displayName}. Tính vào tổng số dư?',
+      actions: [
+        FilledButton.tonal(onPressed: _busy ? null : () => _answer(true), child: const Text('Tính vào tổng')),
+        OutlinedButton(onPressed: _busy ? null : () => _answer(false), child: const Text('Không tính')),
+      ],
     );
   }
 }
 
-class _IngestHealthNote extends StatelessWidget {
-  const _IngestHealthNote({required this.health});
+/// Đã biết mức nhưng có TK tính vào tổng chưa có số dư.
+class _MissingBalanceRow extends StatelessWidget {
+  const _MissingBalanceRow({required this.accounts, required this.onEnter});
+
+  final List<Account> accounts;
+  final VoidCallback onEnter;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ReviewRow(
+      leading: const LeadingDisc(icon: Icons.account_balance_wallet_outlined),
+      text: 'Chưa biết số dư của: ${accounts.map((a) => a.displayName).join(', ')}',
+      actions: [
+        TextButton(key: const Key('enter_balance'), onPressed: onEnter, child: const Text('Nhập số dư')),
+      ],
+    );
+  }
+}
+
+/// Nguồn dữ liệu ngân hàng có vấn đề: hiện nguyên văn cảnh báo máy chủ soạn sẵn.
+class _IngestHealthRow extends StatelessWidget {
+  const _IngestHealthRow({required this.health});
 
   final IngestHealth health;
 
   @override
   Widget build(BuildContext context) {
-    // Server soạn sẵn cảnh báo (gồm cả số email chưa đọc được) → hiện nguyên văn.
+    final theme = Theme.of(context);
     final warnings = health.warnings;
     final lines = <String>[
       ...warnings,
-      if (warnings.isEmpty && health.stale) 'Nguồn dữ liệu ngân hàng đang gặp sự cố — kiểm tra webhook/email.',
+      if (warnings.isEmpty && health.stale) 'Nguồn dữ liệu ngân hàng đang gặp sự cố, kiểm tra webhook/email.',
       if (health.errorEvents > 0) '${health.errorEvents} biến động xử lý lỗi.',
       if (warnings.isEmpty && health.unparsedEvents > 0) '${health.unparsedEvents} email chưa đọc được nội dung.',
       if (health.emailError != null) 'Lỗi email: ${health.emailError}',
     ];
-    final color = Colors.amber.shade800;
-    return Container(
+    return Padding(
       key: const Key('ingest_health_note'),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppLayout.listRowPaddingH, vertical: Space.s3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.sync_problem, color: color),
-          const SizedBox(width: 10),
-          Expanded(child: Text(lines.join('\n'))),
+          LeadingDisc(icon: Icons.sync_problem, foreground: StatusColors.of(context).warning.foreground),
+          const SizedBox(width: Space.s4),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: Space.s2),
+              child: Text(
+                lines.join('\n'),
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-/// Mục tiêu đã tạo trước cho tháng sau: danh sách gọn, chạm để sửa / xoá.
-class _NextMonthGoals extends StatelessWidget {
-  const _NextMonthGoals({required this.goals});
+/// Mục tiêu đã tạo trước cho tháng sau: một hàng thu gọn "Tháng 11 · 2 mục tiêu đã tạo trước", chạm để mở.
+class _NextMonthGoals extends StatefulWidget {
+  const _NextMonthGoals({super.key, required this.month, required this.goals, required this.now});
 
+  final String month;
   final List<GoalView> goals;
+  final DateTime now;
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
-      key: const Key('next_month_goals'),
-      child: Column(
-        children: [
-          for (final goal in goals)
-            ListTile(
-              dense: true,
-              leading: Icon(goal.isReserve ? Icons.savings_outlined : Icons.shopping_basket_outlined),
-              title: Text(goal.name, overflow: TextOverflow.ellipsis),
-              subtitle: Text(
-                [
-                  goal.typeLabel,
-                  if (goal.categoryName != null) '${goal.categoryIcon ?? ''} ${goal.categoryName}'.trim(),
-                  if (goal.spent > 0) 'đã tính ${formatVnd(goal.spent)}',
-                ].join(' · '),
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: Text(formatVnd(goal.amount), style: Theme.of(context).textTheme.titleSmall),
-              onTap: () => DashboardScreen.openGoalForm(context, goal: goal),
-            ),
-        ],
-      ),
-    );
-  }
+  State<_NextMonthGoals> createState() => _NextMonthGoalsState();
 }
 
-class _EmptyGoals extends StatelessWidget {
-  const _EmptyGoals();
+class _NextMonthGoalsState extends State<_NextMonthGoals> {
+  bool _open = false;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Icon(Icons.flag_outlined, size: 40, color: theme.colorScheme.primary),
-            const SizedBox(height: 8),
-            Text('Chưa có mục tiêu', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 4),
-            const Text(
-              'Đặt mục tiêu để được cảnh báo khi số dư xuống gần mức cần giữ, '
-              'vd. tiền trọ 3.000.000đ, tiền ăn 5.000.000đ.',
-              textAlign: TextAlign.center,
+    final label = '${monthShortLabel(widget.month, widget.now)} · ${widget.goals.length} mục tiêu đã tạo trước';
+    final reduce = MediaQuery.disableAnimationsOf(context);
+    return ListGroup(
+      children: [
+        MergeSemantics(
+          child: Semantics(
+            button: true,
+            expanded: _open,
+            child: InkWell(
+              onTap: () => setState(() => _open = !_open),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: AppLayout.listRowMinHeight),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppLayout.listRowPaddingH, vertical: Space.s2),
+                  child: Row(
+                    children: [
+                      const LeadingDisc(icon: Icons.event_outlined),
+                      const SizedBox(width: Space.s4),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onSurface),
+                        ),
+                      ),
+                      AnimatedRotation(
+                        turns: _open ? 0.5 : 0,
+                        duration: reduce ? Duration.zero : MotionDurations.stateLayer,
+                        child: const Icon(Icons.expand_more),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => DashboardScreen.openGoalForm(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Tạo mục tiêu đầu tiên'),
-            ),
-          ],
+          ),
         ),
+        if (_open)
+          for (final goal in widget.goals)
+            GoalRow(goal: goal, onTap: () => DashboardScreen.openGoalForm(context, goal: goal)),
+      ],
+    );
+  }
+}
+
+/// Chưa có mục tiêu tháng này.
+class _EmptyGoals extends StatelessWidget {
+  const _EmptyGoals({required this.monthLabel});
+
+  final String monthLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return EmptyState(
+      icon: Icons.flag_outlined,
+      title: 'Chưa có mục tiêu $monthLabel',
+      message:
+          'Đặt mục tiêu để được báo khi số dư xuống gần mức cần giữ, vd. tiền trọ 3.000.000đ, '
+          'tiền ăn 5.000.000đ.',
+      action: TextButton(
+        onPressed: () => DashboardScreen.openGoalForm(context),
+        child: const Text('Tạo mục tiêu đầu tiên'),
       ),
     );
   }

@@ -2,103 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 
-/// Thông báo lỗi ngắn ở cuối màn hình.
+export 'section_header.dart';
+export 'state_views.dart';
+
+/// Thông báo lỗi ngắn (SnackBar) với lời của máy chủ.
 void showError(BuildContext context, Object error) {
   final message = error is ApiException ? error.message : 'Có lỗi xảy ra: $error';
+  showInfo(context, message);
+}
+
+/// SnackBar nổi (DESIGN.md › Snackbars): 4 s, 6 s khi có nút ([actionLabel] + [onAction], vd. "Hoàn tác").
+void showInfo(BuildContext context, String message, {String? actionLabel, VoidCallback? onAction}) {
+  final hasAction = actionLabel != null && onAction != null;
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
-}
-
-void showInfo(BuildContext context, String message) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
-}
-
-/// Tiêu đề một nhóm nội dung.
-class SectionHeader extends StatelessWidget {
-  const SectionHeader(this.title, {super.key, this.trailing});
-
-  final String title;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 16, 4, 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          ),
-          ?trailing,
-        ],
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: Duration(seconds: hasAction ? 6 : 4),
+        persist: false,
+        action: hasAction ? SnackBarAction(label: actionLabel, onPressed: onAction) : null,
       ),
     );
-  }
-}
-
-/// Màn lỗi toàn trang có nút thử lại.
-class ErrorView extends StatelessWidget {
-  const ErrorView({super.key, required this.message, this.onRetry});
-
-  final String message;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off, size: 48, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
-            if (onRetry != null) ...[
-              const SizedBox(height: 12),
-              FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Thử lại')),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Nhãn nhỏ dạng huy hiệu (trạng thái giao dịch, TK chưa xác nhận…).
-class StatusBadge extends StatelessWidget {
-  const StatusBadge(this.label, {super.key, required this.color, this.icon});
-
-  final String label;
-  final Color color;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[Icon(icon, size: 12, color: color), const SizedBox(width: 3)],
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

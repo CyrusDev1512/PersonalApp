@@ -4,13 +4,19 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
-import '../utils/currency.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import '../theme/typography.dart';
 import '../utils/dates.dart';
+import '../widgets/category_icon.dart';
 import '../widgets/common.dart';
+import '../widgets/list_group.dart';
+import '../widgets/money_row.dart';
+import '../widgets/money_text.dart';
 import 'manual_tx_screen.dart';
 import 'tx_action_sheet.dart';
 
-/// Điều khiển tab Giao dịch từ bên ngoài (vd. chip "chưa phân loại" ở Tổng quan) mà không phải dựng lại màn hình.
+/// Điều khiển tab Giao dịch từ bên ngoài (vd. hàng "chưa phân loại" ở Tổng quan) mà không phải dựng lại màn hình.
 class TransactionsController extends ChangeNotifier {
   bool _uncategorizedRequested = false;
 
@@ -28,7 +34,53 @@ class TransactionsController extends ChangeNotifier {
   }
 }
 
-/// Màn "Giao dịch": lọc theo tháng / chưa phân loại, chạm để phân loại.
+/// Một nhóm ngày trong danh sách giao dịch.
+@immutable
+class TxDayGroup {
+  const TxDayGroup({required this.key, required this.title, required this.items, required this.spent});
+
+  /// "2026-10-14" (ngày giờ Việt Nam) hoặc "" khi không rõ thời gian.
+  final String key;
+
+  /// "Hôm nay", "Hôm qua", "Thứ Hai, 12/10".
+  final String title;
+  final List<Tx> items;
+
+  /// Tổng khoản chi đang tính trong ngày (không gồm chuyển nội bộ, đã loại trừ, đang chờ khớp).
+  final int spent;
+
+  /// Khoản chi được cộng vào tổng ngày (kể cả chi tiền mặt nhập tay).
+  static bool countsAsSpending(Tx tx) => tx.isOut && tx.status == TxStatus.active && !tx.isInternalTransfer;
+
+  /// Gom [items] (mới nhất trước, như máy chủ trả) thành nhóm theo ngày giờ Việt Nam, giữ thứ tự.
+  static List<TxDayGroup> group(List<Tx> items, DateTime now) {
+    final order = <String>[];
+    final byDay = <String, List<Tx>>{};
+    for (final tx in items) {
+      final key = tx.bankTime == null ? '' : dayKeyIct(tx.bankTime!);
+      final list = byDay[key];
+      if (list == null) {
+        order.add(key);
+        byDay[key] = [tx];
+      } else {
+        list.add(tx);
+      }
+    }
+    // Giao dịch không rõ thời gian để cuối.
+    if (order.remove('')) order.add('');
+    return [
+      for (final key in order)
+        TxDayGroup(
+          key: key,
+          title: key.isEmpty ? 'Không rõ thời gian' : dayHeadingIct(byDay[key]!.first.bankTime!, now),
+          items: byDay[key]!,
+          spent: byDay[key]!.where(countsAsSpending).fold(0, (sum, tx) => sum + tx.amount),
+        ),
+    ];
+  }
+}
+
+/// Màn "Giao dịch": lọc theo tháng / chưa phân loại, nhóm theo ngày, chạm để phân loại; "Nhập tay" là FAB.
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key, this.initialUncategorized = false, this.controller, this.active = true});
 
@@ -185,10 +237,24 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     _load();
   }
 
+  void _setFilter(bool uncategorized) {
+    if (uncategorized == _uncategorized) return;
+    setState(() => _uncategorized = uncategorized);
+    _load();
+  }
+
   Future<void> _openTx(Tx tx) async {
     final client = _client;
     if (client == null) return;
-    final result = await showTxActionSheet(context, client: client, tx: tx, categories: _categories);
+    final result = await showTxActionSheet(
+      context,
+      client: client,
+      tx: tx,
+      categories: _categories,
+      onUndone: (_) {
+        if (mounted) _load();
+      },
+    );
     if (result == null || !mounted) return;
     setState(() {
       final index = _items.indexWhere((t) => t.id == tx.id);
@@ -210,22 +276,31 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final gutter = Gutter.of(context);
     final canGoNext = shiftMonth(_month, 1).compareTo(_currentMonth) <= 0;
+    final summaryMonth = context.select<AppState, String?>((s) => s.summary?.month);
+    final pending = context.select<AppState, int>((s) => s.summary?.uncategorizedCount ?? 0);
+    final count = summaryMonth == _month ? pending : 0;
     return Scaffold(
       appBar: AppBar(title: const Text('Giao dịch')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addManual,
+        backgroundColor: AppButtonStyles.secondaryFabBackground(scheme),
+        foregroundColor: AppButtonStyles.secondaryFabForeground(scheme),
         icon: const Icon(Icons.edit_note),
-        label: const Text('Thêm giao dịch'),
+        label: const Text('Nhập tay'),
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+            padding: EdgeInsets.fromLTRB(gutter - Space.s2, 0, gutter, Space.s2),
             child: Wrap(
               alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
+              spacing: Space.s2,
+              runSpacing: Space.s1,
               children: [
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -235,7 +310,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       onPressed: () => _changeMonth(-1),
                       icon: const Icon(Icons.chevron_left),
                     ),
-                    Text(monthLabel(_month), style: Theme.of(context).textTheme.titleSmall),
+                    Text(monthLabel(_month), style: theme.textTheme.titleSmall),
                     IconButton(
                       tooltip: 'Tháng sau',
                       onPressed: canGoNext ? () => _changeMonth(1) : null,
@@ -243,181 +318,306 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
                   ],
                 ),
-                FilterChip(
-                  key: const Key('filter_uncategorized'),
-                  label: const Text('Chưa phân loại'),
-                  selected: _uncategorized,
-                  onSelected: (v) {
-                    setState(() => _uncategorized = v);
-                    _load();
-                  },
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          // Tải lại lỗi khi vẫn còn danh sách cũ (cùng tháng/bộ lọc): báo lỗi thay vì im lặng.
-          if (_error != null && _items.isNotEmpty) _ReloadErrorBanner(message: _error!, onRetry: _load),
-          Expanded(child: _buildList()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildList() {
-    if (_loading && _items.isEmpty) return const Center(child: CircularProgressIndicator());
-    if (_error != null && _items.isEmpty) return ErrorView(message: _error!, onRetry: _load);
-    final hasMore = _items.length < _total;
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: _items.isEmpty
-          ? ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                const SizedBox(height: 80),
-                Center(
-                  child: Text(
-                    _uncategorized
-                        ? 'Không còn giao dịch chưa phân loại trong ${monthLabel(_month).toLowerCase()}.'
-                        : 'Chưa có giao dịch trong ${monthLabel(_month).toLowerCase()}.',
-                    textAlign: TextAlign.center,
+                Padding(
+                  padding: const EdgeInsets.only(left: Space.s2),
+                  child: Wrap(
+                    spacing: Space.s2,
+                    children: [
+                      FilterChip(
+                        key: const Key('filter_all'),
+                        label: const Text('Tất cả'),
+                        selected: !_uncategorized,
+                        onSelected: (_) => _setFilter(false),
+                      ),
+                      FilterChip(
+                        key: const Key('filter_uncategorized'),
+                        label: Text(count > 0 ? 'Chưa phân loại · $count' : 'Chưa phân loại'),
+                        selected: _uncategorized,
+                        onSelected: _setFilter,
+                      ),
+                    ],
                   ),
                 ),
               ],
-            )
-          : ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 96),
-              itemCount: _items.length + (hasMore ? 1 : 0),
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                if (i >= _items.length) {
-                  return Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Center(
-                      child: _loadingMore
-                          ? const CircularProgressIndicator()
-                          : OutlinedButton(onPressed: _loadMore, child: Text('Tải thêm (${_total - _items.length})')),
-                    ),
-                  );
-                }
-                final tx = _items[i];
-                return TxTile(tx: tx, onTap: () => _openTx(tx));
-              },
             ),
+          ),
+          // Tải lại lỗi khi vẫn còn danh sách cũ (cùng tháng/bộ lọc): dải trung tính, số liệu cũ vẫn xem được.
+          if (_error != null && _items.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.fromLTRB(gutter, 0, gutter, Space.s2),
+              child: OfflineStrip(
+                key: const Key('tx_reload_error'),
+                icon: Icons.sync_problem,
+                title: 'Không tải lại được: $_error',
+                onRetry: _load,
+              ),
+            ),
+          Expanded(child: _buildList(gutter)),
+        ],
+      ),
     );
   }
-}
 
-class _ReloadErrorBanner extends StatelessWidget {
-  const _ReloadErrorBanner({required this.message, required this.onRetry});
+  Category? _categoryOf(Tx tx) {
+    final id = tx.categoryId;
+    if (id == null) return null;
+    for (final c in _categories) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
 
-  final String message;
-  final VoidCallback onRetry;
+  Widget _buildList(double gutter) {
+    if (_loading && _items.isEmpty) {
+      return ListView(
+        padding: EdgeInsets.symmetric(horizontal: gutter, vertical: Space.s2),
+        children: const [ListSkeleton(rows: 6)],
+      );
+    }
+    if (_error != null && _items.isEmpty) {
+      return ErrorView(title: 'Không tải được giao dịch', message: _error!, onRetry: _load);
+    }
+    final monthText = monthShortLabel(_month, context.read<AppState>().now()).toLowerCase();
+    if (_items.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.symmetric(horizontal: gutter, vertical: Space.s8),
+          children: [
+            if (_uncategorized)
+              EmptyState(icon: Icons.done_all, title: 'Đã phân loại hết giao dịch $monthText.')
+            else
+              EmptyState(
+                icon: Icons.receipt_long_outlined,
+                title: 'Chưa có giao dịch trong $monthText.',
+                message: 'Giao dịch từ Vietcombank và MB sẽ tự hiện khi ngân hàng báo biến động.',
+              ),
+          ],
+        ),
+      );
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      key: const Key('tx_reload_error'),
-      color: scheme.errorContainer,
-      padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline, size: 20, color: scheme.onErrorContainer),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text('Không tải lại được: $message', style: TextStyle(color: scheme.onErrorContainer)),
-          ),
-          TextButton(onPressed: onRetry, child: const Text('Thử lại')),
-        ],
+    final now = context.read<AppState>().now();
+    final groups = TxDayGroup.group(_items, now);
+    final entries = <_Entry>[];
+    for (var g = 0; g < groups.length; g++) {
+      final group = groups[g];
+      entries.add(_HeaderEntry(group, first: g == 0));
+      for (var i = 0; i < group.items.length; i++) {
+        entries.add(_RowEntry(group.items[i], first: i == 0, last: i == group.items.length - 1));
+      }
+    }
+    final hasMore = _items.length < _total;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(gutter, 0, gutter, AppLayout.fabClearance),
+        itemCount: entries.length + (hasMore ? 1 : 0),
+        itemBuilder: (context, i) {
+          if (i >= entries.length) {
+            return Padding(
+              padding: const EdgeInsets.only(top: Space.s4),
+              child: Center(
+                child: _loadingMore
+                    ? const SizedBox.square(dimension: 32, child: CircularProgressIndicator())
+                    : OutlinedButton(onPressed: _loadMore, child: Text('Tải thêm (${_total - _items.length})')),
+              ),
+            );
+          }
+          return switch (entries[i]) {
+            _HeaderEntry(:final group, :final first) => _DayHeader(group: group, first: first),
+            _RowEntry(:final tx, :final first, :final last) => _GroupPiece(
+              key: ValueKey('tx_${tx.id}'),
+              first: first,
+              last: last,
+              child: TxTile(tx: tx, category: _categoryOf(tx), onTap: () => _openTx(tx)),
+            ),
+          };
+        },
       ),
     );
   }
 }
 
-/// Một dòng giao dịch: số tiền màu theo chiều, danh mục, nguồn, trạng thái.
-class TxTile extends StatelessWidget {
-  const TxTile({super.key, required this.tx, this.onTap});
+sealed class _Entry {
+  const _Entry();
+}
+
+class _HeaderEntry extends _Entry {
+  const _HeaderEntry(this.group, {required this.first});
+
+  final TxDayGroup group;
+  final bool first;
+}
+
+class _RowEntry extends _Entry {
+  const _RowEntry(this.tx, {required this.first, required this.last});
 
   final Tx tx;
-  final VoidCallback? onTap;
+  final bool first;
+  final bool last;
+}
+
+/// Tiêu đề nhóm ngày: "Hôm nay" … và tổng chi trong ngày ở cuối hàng.
+class _DayHeader extends StatelessWidget {
+  const _DayHeader({required this.group, required this.first});
+
+  final TxDayGroup group;
+  final bool first;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final amountColor = tx.isExcluded
-        ? scheme.outline
-        : tx.isOut
-        ? Colors.red.shade700
-        : Colors.green.shade700;
-    final meta = [
-      if (tx.accountName != null && tx.accountName!.isNotEmpty) tx.accountName!,
-      if (tx.bankTime != null) formatShortDateTime(tx.bankTime!),
-      if (tx.sources.isNotEmpty) tx.sources.join(', '),
-    ].join(' · ');
-
-    final categoryLabel = tx.categoryName == null ? null : '${tx.categoryIcon ?? ''} ${tx.categoryName}'.trim();
-
-    return ListTile(
-      onTap: onTap,
-      leading: CircleAvatar(
-        backgroundColor: scheme.surfaceContainerHighest,
-        child: Text(
-          tx.categoryIcon?.isNotEmpty == true ? tx.categoryIcon! : (tx.isOut ? '↑' : '↓'),
-          style: const TextStyle(fontSize: 18),
-        ),
-      ),
-      title: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: EdgeInsets.only(top: first ? Space.s2 : Space.s6, bottom: Space.s2),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: Space.s3,
         children: [
-          Expanded(
-            child: Text(
-              tx.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: tx.isExcluded ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
+          Semantics(
+            header: true,
+            child: Text(group.title, style: theme.textTheme.titleSmall?.copyWith(color: muted)),
+          ),
+          if (group.spent > 0)
+            MoneySentence(
+              ['Đã chi ', group.spent],
+              key: ValueKey('day_total_${group.key}'),
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            formatSignedVnd(tx.amount, outgoing: tx.isOut),
-            style: theme.textTheme.titleSmall?.copyWith(color: amountColor, fontWeight: FontWeight.w700),
-          ),
         ],
       ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (meta.isNotEmpty) Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 4,
-            runSpacing: 4,
+    );
+  }
+}
+
+/// Một hàng trong nhóm ngày: nền và bo góc của list group (góc trên ở hàng đầu, góc dưới ở hàng cuối), đường
+/// kẻ thụt 72 dp giữa các hàng. Dựng từng hàng để danh sách dài vẫn dùng `ListView.builder`.
+class _GroupPiece extends StatelessWidget {
+  const _GroupPiece({super.key, required this.first, required this.last, required this.child});
+
+  final bool first;
+  final bool last;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    const r = Radius.circular(Radii.lg);
+    final radius = BorderRadius.vertical(top: first ? r : Radius.zero, bottom: last ? r : Radius.zero);
+    return ClipRRect(
+      borderRadius: radius,
+      child: Material(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        child: Padding(
+          padding: EdgeInsets.only(top: first ? Space.s1 : 0, bottom: last ? Space.s1 : 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (tx.isInternalTransfer)
-                StatusBadge('Chuyển nội bộ', color: scheme.secondary, icon: Icons.swap_horiz)
-              else if (categoryLabel != null)
-                StatusBadge(categoryLabel, color: scheme.primary)
-              else if (tx.isOut)
-                StatusBadge('Chưa phân loại', color: scheme.error, icon: Icons.label_off_outlined),
-              if (tx.goalName != null)
-                StatusBadge(
-                  tx.goalMonth != null && tx.goalMonth != tx.month
-                      ? '🎯 ${tx.goalName} · ${shortMonthLabel(tx.goalMonth!)}'
-                      : '🎯 ${tx.goalName}',
-                  color: scheme.tertiary,
-                ),
-              if (tx.isPending) StatusBadge('Đang chờ khớp', color: Colors.amber.shade800, icon: Icons.hourglass_top),
-              if (tx.isExcluded) StatusBadge('Đã loại trừ', color: scheme.outline, icon: Icons.block),
-              if (tx.isPossibleDuplicate)
-                StatusBadge('Có thể trùng', color: Colors.deepOrange, icon: Icons.content_copy),
-              if (tx.isManual) StatusBadge('Nhập tay', color: scheme.outline, icon: Icons.edit),
+              if (!first) const ExcludeSemantics(child: Divider(indent: ListGroup.dividerIndent)),
+              child,
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tên nguồn dữ liệu hiển thị.
+String txSourceLabel(String source) => switch (source.toLowerCase()) {
+  'sepay' => 'SePay',
+  'casso' => 'Casso',
+  'email' => 'Email',
+  'manual' => 'Nhập tay',
+  _ => source,
+};
+
+/// Một dòng giao dịch (DESIGN.md › Lists › Row anatomy, surfaces/transactions/brief.md): đĩa danh mục (hoặc
+/// chiều tiền khi chưa phân loại), mô tả, dòng phụ "Thuê trọ · VCB chính · 14:32 · SePay" (giờ Việt Nam),
+/// số tiền có dấu ở cuối, tối đa một pill theo thứ tự ưu tiên.
+class TxTile extends StatelessWidget {
+  const TxTile({super.key, required this.tx, this.category, this.onTap});
+
+  final Tx tx;
+
+  /// Danh mục đầy đủ (có `system_key` để chọn icon); `null` thì dùng emoji trong giao dịch.
+  final Category? category;
+  final VoidCallback? onTap;
+
+  /// Dòng phụ dạng chữ thuần.
+  static String metaFor(Tx tx) {
+    final sources = tx.isManual ? 'Nhập tay' : tx.sources.map(txSourceLabel).join(', ');
+    return [
+      if (tx.categoryName != null && !tx.isInternalTransfer) tx.categoryName!,
+      if (tx.accountName != null && tx.accountName!.isNotEmpty) tx.accountName!,
+      if (tx.bankTime != null) formatTimeIct(tx.bankTime!),
+      if (sources.isNotEmpty) sources,
+      if (tx.isExcluded) 'Đã loại trừ',
+    ].join(' · ');
+  }
+
+  /// Pill duy nhất của hàng: Có thể trùng > Đang chờ khớp > Chưa phân loại > Chuyển nội bộ.
+  static Pill? pillFor(Tx tx) {
+    if (tx.isPossibleDuplicate) return const Pill('Có thể trùng', tone: PillTone.warning, icon: Icons.content_copy);
+    if (tx.isPending) return const Pill('Đang chờ khớp', tone: PillTone.unknown, icon: Icons.hourglass_top);
+    if (tx.isUncategorized) return const Pill('Chưa phân loại', tone: PillTone.invitation, icon: Icons.label_outline);
+    if (tx.isInternalTransfer) return const Pill('Chuyển nội bộ', tone: PillTone.transfer, icon: Icons.swap_horiz);
+    return null;
+  }
+
+  static MoneyTone toneFor(Tx tx) {
+    if (tx.isExcluded) return MoneyTone.excluded;
+    if (tx.isPending) return MoneyTone.pending;
+    if (tx.isInternalTransfer) return MoneyTone.transfer;
+    return tx.isOut ? MoneyTone.outgoing : MoneyTone.incoming;
+  }
+
+  Widget _leading() {
+    if (tx.isInternalTransfer) return const LeadingDisc(icon: Icons.swap_horiz);
+    final visual = CategoryVisual.resolve(systemKey: category?.systemKey, emoji: category?.icon ?? tx.categoryIcon);
+    if (tx.categoryId != null && !visual.isEmpty) return CategoryAvatar(visual: visual);
+    return LeadingDisc(icon: tx.isOut ? Icons.north_east : Icons.south_west);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final meta = metaFor(tx);
+    final goal = tx.goalName ?? (tx.goalId == null ? null : 'Mục tiêu #${tx.goalId}');
+    final goalText = goal == null
+        ? null
+        : (tx.goalMonth != null && tx.goalMonth != tx.month ? '$goal · ${shortMonthLabel(tx.goalMonth!)}' : goal);
+    final pill = pillFor(tx);
+    return MoneyRow(
+      leading: _leading(),
+      title: Text(tx.title),
+      meta: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (meta.isNotEmpty) Text(meta, maxLines: 2, overflow: TextOverflow.ellipsis),
+          if (goalText != null)
+            Row(
+              children: [
+                Icon(Icons.flag_outlined, size: 16, color: muted),
+                const SizedBox(width: Space.s1),
+                Flexible(child: Text(goalText, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              ],
+            ),
         ],
       ),
+      amount: MoneyText(
+        tx.amount,
+        style: MoneyStyle.list,
+        sign: tx.isOut ? MoneySign.outgoing : MoneySign.incoming,
+        tone: toneFor(tx),
+      ),
+      below: pill == null ? null : Align(alignment: AlignmentDirectional.centerStart, child: pill),
+      onTap: onTap,
     );
   }
 }

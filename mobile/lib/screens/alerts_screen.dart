@@ -4,11 +4,15 @@ import 'package:provider/provider.dart';
 import '../api/api_client.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
+import '../theme/tokens.dart';
 import '../utils/dates.dart';
-import '../widgets/alert_tile.dart';
+import '../widgets/alert_detail_sheet.dart';
+import '../widgets/alert_row.dart';
 import '../widgets/common.dart';
+import '../widgets/list_group.dart';
 
-/// Màn "Cảnh báo": lịch sử, đánh dấu đã đọc.
+/// Màn "Cảnh báo" (surfaces/alerts/brief.md): bộ lọc Tất cả / Chưa đọc, nhóm theo ngày, chạm để mở bảng chi
+/// tiết (đánh dấu đã đọc); "Đọc hết" trên thanh tiêu đề.
 class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key, this.active = true});
 
@@ -24,6 +28,13 @@ class _AlertsScreenState extends State<AlertsScreen> {
   bool _loading = true;
   String? _error;
   bool _busy = false;
+
+  /// Bộ lọc "Chưa đọc" (`GET /api/alerts?unread=true`).
+  bool _unreadOnly = false;
+
+  /// Bộ lọc của [_alerts] (khác bộ lọc đang chọn thì không hiện danh sách cũ).
+  bool? _loadedUnread;
+  int _requestId = 0;
 
   @override
   void initState() {
@@ -42,19 +53,23 @@ class _AlertsScreenState extends State<AlertsScreen> {
   Future<void> _load() async {
     final client = _client;
     if (client == null) return;
+    final id = ++_requestId;
+    final unread = _unreadOnly;
     setState(() {
       _loading = true;
       _error = null;
+      if (_loadedUnread != unread) _alerts = const [];
     });
     try {
-      final list = await client.listAlerts(limit: 100);
-      if (!mounted) return;
+      final list = await client.listAlerts(unread: unread, limit: 100);
+      if (!mounted || id != _requestId) return;
       setState(() {
         _alerts = list;
+        _loadedUnread = unread;
         _loading = false;
       });
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted || id != _requestId) return;
       setState(() {
         _loading = false;
         _error = e.message;
@@ -62,13 +77,22 @@ class _AlertsScreenState extends State<AlertsScreen> {
     }
   }
 
+  void _setFilter(bool unreadOnly) {
+    if (unreadOnly == _unreadOnly) return;
+    setState(() => _unreadOnly = unreadOnly);
+    _load();
+  }
+
   Future<void> _open(Alert alert) async {
     final client = _client;
     if (client == null) return;
+    var shown = alert;
     if (!alert.read) {
       try {
         final updated = await client.markAlertRead(alert.id);
+        shown = updated;
         if (!mounted) return;
+        // Bộ lọc "Chưa đọc": cảnh báo vừa đọc vẫn ở lại cho tới lần tải sau (khỏi nhảy dòng dưới tay).
         setState(() => _alerts = [for (final a in _alerts) a.id == alert.id ? updated : a]);
         // Cập nhật số chưa đọc trên thanh điều hướng.
         context.read<AppState>().load();
@@ -77,25 +101,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
       }
     }
     if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(alert.title.isEmpty ? alert.level.label : alert.title),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (alert.createdAt != null)
-                Text(formatDateTime(alert.createdAt!), style: Theme.of(ctx).textTheme.bodySmall),
-              const SizedBox(height: 8),
-              SelectableText(alert.message),
-            ],
-          ),
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Đóng'))],
-      ),
-    );
+    await showAlertDetail(context, client: client, alert: shown);
   }
 
   Future<void> _readAll() async {
@@ -117,43 +123,144 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasUnread = _alerts.any((a) => !a.read);
-    Widget body;
-    if (_loading && _alerts.isEmpty) {
-      body = const Center(child: CircularProgressIndicator());
-    } else if (_error != null && _alerts.isEmpty) {
-      body = ErrorView(message: _error!, onRetry: _load);
-    } else {
-      body = RefreshIndicator(
-        onRefresh: _load,
-        child: _alerts.isEmpty
-            ? ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 80),
-                  Center(child: Text('Chưa có cảnh báo nào.')),
-                ],
-              )
-            : ListView.separated(
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: _alerts.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, i) => AlertTile(alert: _alerts[i], onTap: () => _open(_alerts[i])),
-              ),
-      );
-    }
+    final gutter = Gutter.of(context);
+    final unreadCount = context.select<AppState, int>((s) => s.summary?.unreadAlerts ?? 0);
+    final hasUnread = unreadCount > 0 || _alerts.any((a) => !a.read);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cảnh báo'),
         actions: [
-          TextButton.icon(
-            onPressed: hasUnread && !_busy ? _readAll : null,
-            icon: const Icon(Icons.done_all),
-            label: const Text('Đọc hết'),
+          Padding(
+            padding: const EdgeInsets.only(right: Space.s2),
+            child: TextButton.icon(
+              onPressed: hasUnread && !_busy ? _readAll : null,
+              icon: const Icon(Icons.done_all),
+              label: const Text('Đọc hết'),
+            ),
           ),
         ],
       ),
-      body: body,
+      body: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(gutter, 0, gutter, Space.s2),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Wrap(
+                spacing: Space.s2,
+                children: [
+                  FilterChip(
+                    key: const Key('alerts_filter_all'),
+                    label: const Text('Tất cả'),
+                    selected: !_unreadOnly,
+                    onSelected: (_) => _setFilter(false),
+                  ),
+                  FilterChip(
+                    key: const Key('alerts_filter_unread'),
+                    label: Text(unreadCount > 0 ? 'Chưa đọc · $unreadCount' : 'Chưa đọc'),
+                    selected: _unreadOnly,
+                    onSelected: _setFilter,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(child: _buildList(gutter)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildList(double gutter) {
+    final alerts = _loadedUnread == _unreadOnly ? _alerts : const <Alert>[];
+    if (_loading && alerts.isEmpty) {
+      return ListView(
+        padding: EdgeInsets.symmetric(horizontal: gutter, vertical: Space.s2),
+        children: const [ListSkeleton(rows: 6)],
+      );
+    }
+    if (_error != null && alerts.isEmpty) {
+      return ErrorView(title: 'Không tải được cảnh báo', message: _error!, onRetry: _load);
+    }
+    if (alerts.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.symmetric(horizontal: gutter, vertical: Space.s8),
+          children: [
+            if (_unreadOnly)
+              const EmptyState(icon: Icons.done_all, title: 'Không còn cảnh báo chưa đọc.')
+            else
+              const EmptyState(
+                icon: Icons.notifications_none,
+                title: 'Chưa có cảnh báo nào.',
+                message: 'Khi số dư xuống gần mức cần giữ, app sẽ báo ở đây và qua Telegram.',
+              ),
+          ],
+        ),
+      );
+    }
+
+    final now = context.read<AppState>().now();
+    // Nhóm theo ngày (giờ Việt Nam), giữ thứ tự mới nhất trước của máy chủ.
+    final entries = <Object>[];
+    String? lastDay;
+    for (var i = 0; i < alerts.length; i++) {
+      final a = alerts[i];
+      final day = a.createdAt == null ? '' : dayKeyIct(a.createdAt!);
+      final first = day != lastDay;
+      if (first) {
+        entries.add(a.createdAt == null ? 'Không rõ thời gian' : dayHeadingIct(a.createdAt!, now));
+        lastDay = day;
+      }
+      final nextDay = i + 1 < alerts.length
+          ? (alerts[i + 1].createdAt == null ? '' : dayKeyIct(alerts[i + 1].createdAt!))
+          : null;
+      entries.add((alert: a, first: first, last: nextDay != day));
+    }
+    final theme = Theme.of(context);
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(gutter, 0, gutter, Space.s8),
+        itemCount: entries.length,
+        itemBuilder: (context, i) {
+          final e = entries[i];
+          if (e is String) {
+            return Padding(
+              padding: EdgeInsets.only(top: i == 0 ? Space.s2 : Space.s6, bottom: Space.s2),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  e,
+                  style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            );
+          }
+          final (:alert, :first, :last) = e as ({Alert alert, bool first, bool last});
+          const r = Radius.circular(Radii.lg);
+          return ClipRRect(
+            key: ValueKey('alert_${alert.id}'),
+            borderRadius: BorderRadius.vertical(top: first ? r : Radius.zero, bottom: last ? r : Radius.zero),
+            child: Material(
+              color: theme.colorScheme.surfaceContainerLow,
+              child: Padding(
+                padding: EdgeInsets.only(top: first ? Space.s1 : 0, bottom: last ? Space.s1 : 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!first) const ExcludeSemantics(child: Divider(indent: ListGroup.dividerIndent)),
+                    AlertRow(alert: alert, onTap: () => _open(alert)),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
