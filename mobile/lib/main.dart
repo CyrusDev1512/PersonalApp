@@ -33,11 +33,16 @@ ThemeData buildTheme(Brightness brightness) => ThemeData(
   inputDecorationTheme: const InputDecorationTheme(isDense: true),
 );
 
+/// Bọc nội dung app ngay dưới MaterialApp (quanh Navigator); [navigatorKey] là Navigator gốc của app.
+typedef AppShellBuilder = Widget Function(BuildContext context, Widget child, GlobalKey<NavigatorState> navigatorKey);
+
 /// Gốc ứng dụng "Chi tiêu".
 ///
 /// [state] cho phép test truyền sẵn AppState (với ApiClient giả); mặc định app tự tạo
 /// AppState đọc URL/token từ shared_preferences.
 /// [push]: dịch vụ thông báo đẩy (main() dùng Firebase); mặc định [NoopPushService] (không có push).
+/// [shellBuilder]: bọc thêm quanh Navigator (bản dùng thử trên web thêm thanh "Bản dùng thử");
+/// mặc định `null` = không bọc gì.
 class PersonalFinanceApp extends StatefulWidget {
   const PersonalFinanceApp({
     super.key,
@@ -45,12 +50,14 @@ class PersonalFinanceApp extends StatefulWidget {
     this.clientFactory,
     this.refreshInterval = const Duration(seconds: 30),
     this.push,
+    this.shellBuilder,
   });
 
   final AppState? state;
   final ApiClientFactory? clientFactory;
   final Duration? refreshInterval;
   final PushService? push;
+  final AppShellBuilder? shellBuilder;
 
   @override
   State<PersonalFinanceApp> createState() => _PersonalFinanceAppState();
@@ -119,8 +126,12 @@ class _PersonalFinanceAppState extends State<PersonalFinanceApp> {
 
   @override
   Widget build(BuildContext context) {
+    final shell = widget.shellBuilder;
     final app = MaterialApp(
       navigatorKey: _navigatorKey,
+      builder: shell == null
+          ? null
+          : (context, child) => shell(context, child ?? const SizedBox.shrink(), _navigatorKey),
       scaffoldMessengerKey: _messengerKey,
       title: 'Chi tiêu',
       debugShowCheckedModeBanner: false,

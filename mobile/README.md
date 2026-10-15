@@ -12,6 +12,7 @@ flutter run            # cần thiết bị/emulator
 flutter analyze
 flutter test
 flutter build apk --release   # cần Android SDK
+scripts/build_web_demo.sh     # bản demo chạy trên trình duyệt, không cần máy chủ (xem README gốc, mục 7)
 ```
 
 Lần đầu mở app sẽ hiện màn **Kết nối máy chủ**: nhập URL backend (nên là `https://…` qua Cloudflare Tunnel) và
@@ -31,3 +32,5 @@ Lần đầu mở app sẽ hiện màn **Kết nối máy chủ**: nhập URL ba
 - `lib/screens/` — Tổng quan, form mục tiêu, Giao dịch (+ bảng phân loại, nhập tay), Cảnh báo, Cài đặt, Kết nối.
 - `lib/widgets/` — `StatusBanner`, `GoalCard`, hộp thoại tài khoản/số dư, các widget chung.
 - `lib/utils/` — định dạng tiền VND (`6.500.000đ`, định dạng khi gõ) và tháng theo giờ Việt Nam.
+- `lib/demo/` + `lib/main_demo.dart` — bản demo trên trình duyệt: máy chủ giả trong app (`DemoBackend`, dữ liệu giả,
+  port gọn logic của backend), thông báo đẩy giả và thanh "Giả lập biến động số dư". Không dùng trong APK.

@@ -167,6 +167,31 @@ export BASE_URL=http://127.0.0.1:8000 APP_TOKEN=... SEPAY_API_KEY=...
     --amount 15000000 --balance 21500000 --content "CTY ABC tra luong"   # → ✅ an toàn trở lại (cần CASSO_SECURE_KEY)
 ```
 
+### Dùng thử bản demo trên trình duyệt
+
+Bản demo chạy **chính app Flutter** (cùng màn hình, cùng cách tính mức sàn / được tiêu / cảnh báo) với một máy chủ
+giả nằm ngay trong app:
+
+- **Dữ liệu giả**: TK VCB + MB tổng 10.000.000đ, quỹ giữ "Tiền trọ" 3.000.000đ, ngân sách "Tiền ăn" 5.000.000đ (đã chi
+  2.000.000đ) và vài giao dịch mẫu theo ngày hiện tại.
+- **Không cần máy chủ**: không cần địa chỉ server hay APP_TOKEN, không gửi dữ liệu đi đâu (CanvasKit và font nằm sẵn
+  cạnh `index.html`).
+- **Không lưu lại**: tải lại trang là về dữ liệu ban đầu.
+
+Bấm **Giả lập biến động số dư** ở thanh trên cùng: "Rút ATM 3.500.000đ" → ⚠️ *Sắp chạm mức mục tiêu* (kèm thông báo đẩy
+giả trong app), "Nhận lương 15.000.000đ" → ✅ *An toàn trở lại*; **Đặt lại dữ liệu demo** để về trạng thái ban đầu.
+
+```bash
+mobile/scripts/build_web_demo.sh   # cần Flutter 3.47, python3 + fonttools, font Noto Color Emoji và DejaVu Sans
+python3 -m http.server --directory mobile/build/web 8080   # mở http://localhost:8080
+```
+
+`mobile/build/web_artifact/` là bản để đăng lên web tĩnh (chỉ đường dẫn tương đối, không service worker). Trình duyệt
+cần hỗ trợ WebAssembly (Chrome, Edge, Firefox, Safari bản mới).
+
+Bản demo dùng entrypoint riêng `mobile/lib/main_demo.dart`, nên **APK không thay đổi**. **App thật vẫn cần máy chủ**
+(mục 1) để có số dư, giao dịch và cảnh báo thật.
+
 ## 8. Sao lưu
 
 ```bash

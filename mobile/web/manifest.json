@@ -1,11 +1,11 @@
 {
-    "name": "personal_finance",
-    "short_name": "personal_finance",
+    "name": "Chi tiêu (bản demo)",
+    "short_name": "Chi tiêu",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#f4fbf9",
+    "theme_color": "#006a63",
+    "description": "Bản dùng thử app Chi tiêu: dữ liệu giả, chạy hoàn toàn trong trình duyệt, không cần máy chủ.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
