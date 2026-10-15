@@ -225,6 +225,8 @@ __marimo__/
 *.db-shm
 *.sqlite
 data/
+# dữ liệu tĩnh của skill (font index), không phải dữ liệu runtime
+!/.agents/skills/impeccable/scripts/data/
 
 # PersonalApp: khoá bí mật (Firebase service account, ...) và cấu hình Firebase của app
 secrets/

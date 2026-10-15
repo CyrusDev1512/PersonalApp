@@ -1,0 +1,5 @@
+interface:
+  display_name: "test-driven-development"
+  short_description: "Develop behavioral fixes with red and green tests"
+policy:
+  allow_implicit_invocation: true

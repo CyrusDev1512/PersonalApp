@@ -1,0 +1,5 @@
+interface:
+  display_name: "performance-testing-skill"
+  short_description: "Plan and assess bounded multi-user load tests"
+policy:
+  allow_implicit_invocation: true
