@@ -55,6 +55,9 @@ Một số tình huống được xử lý sẵn:
 
 ## 1. Chạy backend
 
+> **Máy Windows (Docker Desktop + ngrok miễn phí)**: làm theo [docs/cai-dat-windows.md](docs/cai-dat-windows.md).
+> Nháy đúp `scripts\windows\setup.cmd` là script tự tạo `.env`, sinh khoá, khởi động server và lấy Chat ID Telegram.
+
 ### Bằng Docker (khuyên dùng)
 
 ```bash
@@ -81,7 +84,9 @@ cp ../.env.example .env   # điền APP_TOKEN, ...
 
 ## 2. Public HTTPS cho webhook (Cloudflare Tunnel)
 
-SePay/Casso cần gọi được tới server qua HTTPS.
+SePay/Casso cần gọi được tới server qua HTTPS. Không có tên miền riêng: dùng tên miền miễn phí của **ngrok**
+(`NGROK_AUTHTOKEN`, `NGROK_DOMAIN` trong `.env`, rồi `docker compose --profile ngrok up -d`), xem
+[docs/cai-dat-windows.md](docs/cai-dat-windows.md). Hoặc dùng Cloudflare Tunnel (cần tên miền trên Cloudflare):
 1. Vào Cloudflare Zero Trust → *Networks → Tunnels* → tạo tunnel, chép **token** vào `CLOUDFLARE_TUNNEL_TOKEN` trong `.env`.
 2. Thêm *Public Hostname*, ví dụ `finance.tenmien.com` → service `http://app:8000`.
 3. `docker compose --profile tunnel up -d`.
