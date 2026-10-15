@@ -9,8 +9,8 @@ import '../theme/tokens.dart';
 /// tiền [amount] căn phải kèm [amountCaption] nhỏ bên dưới, và [below] (pill trạng thái, thanh tiến độ…) dưới
 /// phần chữ.
 ///
-/// Chỉ tiêu đề đứng cạnh số tiền; dòng phụ luôn rộng hết hàng, dưới tiêu đề và số tiền (không bị bóp vào cột
-/// hẹp cạnh số tiền). Khi chỗ cạnh số tiền hẹp hơn 128 dp (điện thoại 360 dp) mà tiêu đề ở đó phải xuống dòng
+/// Chỉ tiêu đề đứng cạnh số tiền; dòng phụ ngắn (vừa một dòng ở đó) nằm ngay dưới tiêu đề, dòng phụ dài rộng hết
+/// hàng dưới tiêu đề và số tiền (không bị bóp vào cột hẹp cạnh số tiền). Khi chỗ cạnh số tiền hẹp hơn 128 dp (điện thoại 360 dp) mà tiêu đề ở đó phải xuống dòng
 /// nhiều hơn khi rộng hết hàng, hàng đó chuyển sang bố cục xếp chồng. Chữ lớn hơn 125%
 /// (`textScaler.scale(16) > 20`) thì mọi hàng xếp chồng: tiêu đề và dòng phụ chiếm hết bề ngang, số tiền xuống
 /// dòng riêng dưới dòng phụ, vẫn căn phải để các số tiền thành một cột. Không dùng `ListTile.trailing` (nó bóp
@@ -139,7 +139,8 @@ enum _Slot { title, meta, amount }
 
 /// Tiêu đề + số tiền trên cùng một dòng (khi tiêu đề vừa), dòng phụ rộng hết hàng ở dưới.
 ///
-/// - Cạnh nhau: tiêu đề ở đầu, số tiền căn cuối, cách 16 dp; dòng phụ dưới phần cao hơn của hai thứ đó.
+/// - Cạnh nhau: tiêu đề ở đầu, số tiền căn cuối, cách 16 dp; dòng phụ ngay dưới tiêu đề nếu vừa một dòng ở cột
+///   đó, không thì dưới phần cao hơn của tiêu đề và số tiền, rộng hết hàng.
 /// - Xếp chồng ([stacked], hoặc chỗ cạnh số tiền < [minBesideWidth] mà tiêu đề ở đó cần thêm dòng): tiêu đề,
 ///   dòng phụ, rồi số tiền căn cuối trên dòng riêng (cách 4 dp).
 class _TitleAmountLayout extends SlottedMultiChildRenderObjectWidget<_Slot, RenderBox> {
@@ -235,7 +236,11 @@ class _RenderTitleAmount extends RenderBox with SlottedContainerRenderObjectMixi
     final side = _sideBySide(width, amountSize.width);
     final titleWidth = side ? width - _gap - amountSize.width : width;
     final titleSize = place(_title, BoxConstraints(maxWidth: titleWidth));
-    final metaSize = place(_meta, BoxConstraints(maxWidth: width));
+    // Dòng phụ ngắn vừa một dòng cạnh số tiền thì nằm ngay dưới tiêu đề (không bị đẩy xuống dưới chú thích của
+    // số tiền); dài hơn thì chạy hết bề ngang dưới cả tiêu đề và số tiền.
+    final meta = _meta;
+    final metaBeside = side && meta != null && meta.getMaxIntrinsicWidth(double.infinity) <= titleWidth;
+    final metaSize = place(meta, BoxConstraints(maxWidth: metaBeside ? titleWidth : width));
 
     double x(double childWidth, {required bool end}) =>
         (end == (_textDirection == TextDirection.ltr)) ? width - childWidth : 0;
@@ -244,7 +249,12 @@ class _RenderTitleAmount extends RenderBox with SlottedContainerRenderObjectMixi
     Offset titleAt = Offset(x(titleSize.width, end: false), 0);
     Offset amountAt;
     Offset metaAt;
-    if (side) {
+    if (side && metaBeside) {
+      amountAt = Offset(x(amountSize.width, end: true), 0);
+      metaAt = Offset(x(metaSize.width, end: false), titleSize.height);
+      final textBottom = metaAt.dy + metaSize.height;
+      height = textBottom > amountSize.height ? textBottom : amountSize.height;
+    } else if (side) {
       final top = titleSize.height > amountSize.height ? titleSize.height : amountSize.height;
       amountAt = Offset(x(amountSize.width, end: true), 0);
       metaAt = Offset(x(metaSize.width, end: false), top);
