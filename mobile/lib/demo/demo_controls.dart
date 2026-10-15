@@ -1,11 +1,12 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
 import '../utils/currency.dart';
+import '../widgets/form_parts.dart';
+import '../widgets/list_group.dart';
 import 'demo_backend.dart';
 
 /// Họ font emoji / ký hiệu mà bản dùng thử nạp sẵn (main_demo.dart) để không phải tải font từ Internet.
@@ -148,56 +149,49 @@ class _DemoBannerState extends State<DemoBanner> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final connected = context.select<AppState, bool>((s) => s.isConnected);
-    final text = Theme.of(context).textTheme;
-    final labelStyle = text.labelMedium?.copyWith(color: scheme.onTertiaryContainer);
-    Widget button({required bool narrow}) => connected
-        ? FilledButton.icon(
-            key: const Key('demo_simulate'),
-            onPressed: _busy ? null : _openSheet,
-            style: FilledButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              minimumSize: const Size(0, 36),
-            ),
-            icon: const Icon(Icons.bolt, size: 18),
-            label: const Text('Giả lập biến động số dư', maxLines: 1, overflow: TextOverflow.ellipsis),
-          )
-        : FilledButton.icon(
-            key: const Key('demo_reconnect'),
-            onPressed: _busy ? null : _reconnect,
-            style: FilledButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              minimumSize: const Size(0, 36),
-            ),
-            icon: const Icon(Icons.link, size: 18),
-            // Màn hẹp: chữ ngắn để nhãn "đã ngắt kết nối" bên trái không bị cắt; trình đọc màn hình vẫn đọc đủ câu.
-            label: Text(
-              narrow ? 'Kết nối lại' : 'Kết nối lại bản dùng thử',
-              semanticsLabel: 'Kết nối lại bản dùng thử',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          );
+    final labelStyle = theme.textTheme.labelLarge!.copyWith(color: scheme.onTertiaryContainer);
+    final buttonText = connected ? 'Giả lập biến động số dư' : 'Kết nối lại bản dùng thử';
+    // Nút demo không dùng màu men lam (dành cho "Thêm mục tiêu"): filled `tertiary` trên dải `tertiaryContainer`.
+    final button = FilledButton.icon(
+      key: Key(connected ? 'demo_simulate' : 'demo_reconnect'),
+      onPressed: _busy ? null : (connected ? _openSheet : _reconnect),
+      style: FilledButton.styleFrom(
+        backgroundColor: scheme.tertiary,
+        foregroundColor: scheme.onTertiary,
+        padding: const EdgeInsetsDirectional.only(start: Space.s4, end: Space.s6),
+        tapTargetSize: MaterialTapTargetSize.padded,
+      ),
+      icon: Icon(connected ? Icons.bolt : Icons.link, size: 18),
+      label: Text(buttonText),
+    );
+    const labelText = 'Bản dùng thử · dữ liệu giả';
+    final label = Semantics(
+      container: true,
+      label: 'Bản dùng thử, dữ liệu giả',
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.science_outlined, size: 18, color: scheme.onTertiaryContainer),
+          const SizedBox(width: Space.s2),
+          Flexible(child: Text(labelText, style: labelStyle)),
+        ],
+      ),
+    );
     return Material(
       color: scheme.tertiaryContainer,
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
+          padding: const EdgeInsetsDirectional.only(start: Space.s4, end: Space.s3),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final narrow = constraints.maxWidth < 460;
-              // Nhãn chỉ chiếm phần nó cần (tối đa [maxLabel]); nút lấy phần còn lại, thiếu chỗ thì rút gọn chữ.
-              // Màn hẹp: nhãn hai dòng, rộng bằng dòng dài nhất đo theo font thật (icon 18 + khoảng 8), để không
-              // bao giờ mất chữ "dữ liệu giả" / "đã ngắt kết nối".
-              double lineWidth(String line) {
+              double textWidth(String text) {
                 final painter = TextPainter(
-                  text: TextSpan(text: line, style: labelStyle),
+                  text: TextSpan(text: text, style: labelStyle),
                   textDirection: Directionality.of(context),
                   textScaler: MediaQuery.textScalerOf(context),
                   maxLines: 1,
@@ -207,41 +201,32 @@ class _DemoBannerState extends State<DemoBanner> {
                 return width;
               }
 
-              final lines = ['Bản dùng thử', if (connected) 'dữ liệu giả' else 'đã ngắt kết nối'];
-              final maxLabel = narrow ? 18 + 8 + lines.map(lineWidth).reduce(math.max) + 1 : 280.0;
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxLabel),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.science_outlined, size: 18, color: scheme.onTertiaryContainer),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Semantics(
-                            container: true,
-                            label: connected ? 'Bản dùng thử · dữ liệu giả' : 'Bản dùng thử · đã ngắt kết nối',
-                            excludeSemantics: true,
-                            child: Text(
-                              switch ((connected, narrow)) {
-                                (true, true) => 'Bản dùng thử\ndữ liệu giả',
-                                (true, false) => 'Bản dùng thử · dữ liệu giả',
-                                (false, true) => 'Bản dùng thử\nđã ngắt kết nối',
-                                (false, false) => 'Bản dùng thử · đã ngắt kết nối',
-                              },
-                              style: labelStyle,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+              // Như OverflowBar: nhãn và nút chung một hàng khi cả hai vừa ở bề rộng tự nhiên; không thì nút
+              // xuống hàng thứ hai, căn cuối. Không bao giờ cắt chữ.
+              final labelWidth = 18 + Space.s2 + textWidth(labelText);
+              final buttonWidth = Space.s4 + 18 + Space.s2 + textWidth(buttonText) + Space.s6;
+              final oneRow = labelWidth + Space.s4 + buttonWidth <= constraints.maxWidth;
+              if (oneRow) {
+                return ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: AppLayout.touchTargetMin),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(child: label),
+                      const SizedBox(width: Space.s4),
+                      button,
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Flexible(child: button(narrow: narrow)),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: Space.s3, bottom: Space.s1),
+                    child: Align(alignment: AlignmentDirectional.centerStart, child: label),
+                  ),
+                  Align(alignment: AlignmentDirectional.centerEnd, child: button),
                 ],
               );
             },
@@ -336,7 +321,7 @@ Future<DemoSheetAction?> showDemoSimulateSheet(BuildContext context, {required D
     isScrollControlled: true,
     showDragHandle: true,
     useSafeArea: true,
-    constraints: BoxConstraints(maxWidth: 640, maxHeight: MediaQuery.sizeOf(context).height * 0.9),
+    constraints: AppLayout.sheetConstraints(context),
     builder: (_) => DemoSimulateSheet(accounts: backend.bankAccounts),
   );
 }
@@ -406,70 +391,63 @@ class _DemoSimulateSheetState extends State<DemoSimulateSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final text = theme.textTheme;
     final vcb = widget.accounts.where((a) => a.id == _defaultAccount).firstOrNull;
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(Space.s5, 0, Space.s5, Space.s5 + MediaQuery.viewInsetsOf(context).bottom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Giả lập biến động số dư', style: theme.textTheme.titleLarge),
-          const SizedBox(height: 4),
+          Semantics(
+            header: true,
+            child: Text('Giả lập biến động số dư', style: text.headlineSmall?.copyWith(color: scheme.onSurface)),
+          ),
+          const SizedBox(height: Space.s1),
           Text(
             'Tạo một giao dịch ngân hàng giả như webhook SePay gửi về. App tính lại mức an toàn, tạo cảnh báo '
             'và gửi thông báo đẩy khi cảnh báo quan trọng.',
-            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
-          const SizedBox(height: 12),
-          if (vcb != null)
-            Text('Mẫu có sẵn · ${vcb.name}', style: theme.textTheme.labelLarge)
-          else
-            Text('Mẫu có sẵn', style: theme.textTheme.labelLarge),
-          const SizedBox(height: 4),
-          Card(
-            margin: EdgeInsets.zero,
-            child: Column(
-              children: [
-                for (final p in _presets)
-                  ListTile(
-                    key: Key('demo_preset_${p.key}'),
-                    enabled: vcb != null,
-                    leading: Icon(p.icon),
-                    title: Text(p.title),
-                    subtitle: Text(p.subtitle),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _pick(p),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text('Tự nhập', style: theme.textTheme.labelLarge),
-          const SizedBox(height: 8),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'out', label: Text('Tiền ra'), icon: Icon(Icons.arrow_upward)),
-              ButtonSegment(value: 'in', label: Text('Tiền vào'), icon: Icon(Icons.arrow_downward)),
+          const SizedBox(height: Space.s6),
+          Text(vcb != null ? 'Mẫu có sẵn · ${vcb.name}' : 'Mẫu có sẵn', style: text.titleSmall),
+          const SizedBox(height: Space.s2),
+          ListGroup(
+            children: [
+              for (final p in _presets)
+                ListTile(
+                  key: Key('demo_preset_${p.key}'),
+                  enabled: vcb != null,
+                  leading: LeadingDisc(icon: p.icon),
+                  title: Text(p.title),
+                  subtitle: Text(p.subtitle),
+                  onTap: () => _pick(p),
+                ),
             ],
-            selected: {_direction},
-            onSelectionChanged: (s) => setState(() => _direction = s.first),
           ),
-          const SizedBox(height: 12),
-          TextField(
+          const SizedBox(height: Space.s6),
+          Text('Tự nhập', style: text.titleSmall),
+          const SizedBox(height: Space.s2),
+          AdaptiveSegmentedButton<String>(
+            choices: const [
+              SegmentChoice('out', 'Tiền ra', icon: Icons.north_east),
+              SegmentChoice('in', 'Tiền vào', icon: Icons.south_west),
+            ],
+            selected: _direction,
+            onChanged: (v) => setState(() => _direction = v),
+          ),
+          const SizedBox(height: Space.s4),
+          MoneyField(
             key: const Key('demo_amount'),
             controller: _amount,
-            keyboardType: TextInputType.number,
-            inputFormatters: const [VndInputFormatter()],
-            decoration: InputDecoration(
-              labelText: 'Số tiền',
-              suffixText: 'đ',
-              errorText: _amountError,
-              border: const OutlineInputBorder(),
-            ),
+            label: 'Số tiền',
+            hint: 'VD: 120.000',
+            errorText: _amountError,
             onChanged: (_) {
               if (_amountError != null) setState(() => _amountError = null);
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: Space.s4),
           TextField(
             key: const Key('demo_content'),
             controller: _content,
@@ -478,28 +456,28 @@ class _DemoSimulateSheetState extends State<DemoSimulateSheet> {
               labelText: 'Nội dung chuyển khoản',
               hintText: 'VD: GRABFOOD COM TAM',
               helperText: 'Nội dung khớp luật sẽ được tự phân loại (GRABFOOD → Ăn uống, LUONG → Thu nhập…)',
-              helperMaxLines: 2,
-              border: OutlineInputBorder(),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: Space.s4),
           DropdownButtonFormField<int>(
             key: const Key('demo_account'),
             initialValue: _accountId,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Tài khoản', border: OutlineInputBorder()),
+            decoration: const InputDecoration(labelText: 'Tài khoản'),
             items: [for (final a in widget.accounts) DropdownMenuItem(value: a.id, child: Text(_accountLabel(a)))],
             onChanged: (v) => setState(() => _accountId = v),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: Space.s4),
           FilledButton.icon(
             key: const Key('demo_custom_submit'),
             onPressed: _accountId == null ? null : _submitCustom,
-            icon: const Icon(Icons.send),
+            style: FilledButton.styleFrom(backgroundColor: scheme.tertiary, foregroundColor: scheme.onTertiary),
+            icon: const Icon(Icons.bolt),
             label: const Text('Tạo biến động'),
           ),
-          const SizedBox(height: 8),
-          const Divider(height: 24),
+          const SizedBox(height: Space.s6),
+          const Divider(),
+          const SizedBox(height: Space.s4),
           OutlinedButton.icon(
             key: const Key('demo_reset'),
             onPressed: () => Navigator.pop(context, const DemoReset()),
