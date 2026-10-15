@@ -143,14 +143,15 @@ class FloorRulerPainter extends CustomPainter {
       return Rect.fromLTRB(x0, top, x1, top + Ruler.barHeight);
     }
 
-    RRect pill(Rect rect) => RRect.fromRectAndRadius(rect, Radius.circular(math.min(r, rect.width / 2)));
+    RRect pill(Rect rect) => RRect.fromRectAndRadius(rect, Radius.circular(math.max(0.0, math.min(r, rect.width / 2))));
 
     final reserved = segment(0, geometry.reservedEnd);
     if (reserved != null) canvas.drawRRect(pill(reserved), Paint()..color = _a(colors.barReserved));
 
     if (geometry.hasMissing) {
       final missing = segment(geometry.reservedEnd, geometry.missingEnd);
-      if (missing != null) {
+      // Đoạn thiếu hẹp hơn nét viền (đang lớn dần trong chuyển động): chưa vẽ, tránh hình có bề rộng âm.
+      if (missing != null && missing.width > Ruler.missingStroke) {
         const inset = Ruler.missingStroke / 2;
         canvas.drawRRect(
           pill(missing.deflate(inset)),

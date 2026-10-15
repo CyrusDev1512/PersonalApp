@@ -293,7 +293,9 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.tap(find.text('Đóng'));
+    // Cùng bảng chi tiết với tab Cảnh báo (bảng trượt, không còn hộp thoại "Đóng"): chạm ra ngoài để đóng.
+    expect(find.byType(BottomSheet), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('push_alert_dialog')), findsNothing);
     // Tab Cảnh báo đã mở và tải danh sách.
@@ -316,9 +318,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('push_snackbar')), findsOneWidget);
-    // Gọn: tiêu đề + dòng đầu của nội dung.
+    // Gọn: tiêu đề (bỏ emoji đầu câu) + dòng đầu của nội dung.
     final snackbar = find.byKey(const Key('push_snackbar'));
-    expect(find.descendant(of: snackbar, matching: find.text('⚠️ Sắp chạm mức mục tiêu')), findsOneWidget);
+    expect(find.descendant(of: snackbar, matching: find.text('Sắp chạm mức mục tiêu')), findsOneWidget);
     expect(find.descendant(of: snackbar, matching: find.text('−3.500.000đ · VCB')), findsOneWidget);
     expect(server.where('GET', '/api/summary').length, summaryLoads + 1);
     expect(find.byType(TxActionSheet), findsNothing);

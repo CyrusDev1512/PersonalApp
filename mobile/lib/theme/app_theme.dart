@@ -300,9 +300,10 @@ ThemeData buildTheme(Brightness brightness, {List<String> fontFamilyFallback = c
       }),
       hintStyle: text.bodyLarge!.copyWith(color: scheme.onSurfaceVariant),
       helperStyle: text.bodySmall!.copyWith(color: scheme.onSurfaceVariant),
-      helperMaxLines: 3,
+      // Câu hỗ trợ / lỗi ngắn (≤ 3 dòng ở 100%), nhưng không bao giờ bị cắt khi chữ phóng to (200% cần gấp đôi).
+      helperMaxLines: 8,
       errorStyle: text.bodySmall!.copyWith(color: scheme.error),
-      errorMaxLines: 3,
+      errorMaxLines: 8,
       suffixStyle: text.bodyLarge!.copyWith(color: scheme.onSurfaceVariant),
       prefixIconColor: scheme.onSurfaceVariant,
       suffixIconColor: scheme.onSurfaceVariant,

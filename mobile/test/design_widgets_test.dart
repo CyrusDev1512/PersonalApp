@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:ui' show PictureRecorder;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -327,6 +328,64 @@ void main() {
       expect(amount.top, lessThan(tester.getRect(find.byKey(const Key('meta'))).bottom));
     });
 
+    testWidgets('dòng phụ rộng hết hàng (chạy dưới cả số tiền), không bị bóp vào cột cạnh số tiền', (tester) async {
+      _phone(tester, const Size(390, 844));
+      await tester.pumpWidget(
+        _app(
+          MoneyRow(
+            leading: const LeadingDisc(icon: Icons.north_east),
+            title: const Text('RUT TIEN ATM VCB LE DUAN Q1', key: Key('title')),
+            meta: const Text('Ăn uống · VCB chính · 19:05 · SePay', key: Key('meta')),
+            amount: const MoneyText(-3500000, key: Key('amount'), style: MoneyStyle.list, sign: MoneySign.outgoing),
+          ),
+        ),
+      );
+      final title = tester.getRect(find.byKey(const Key('title')));
+      final meta = tester.getRect(find.byKey(const Key('meta')));
+      final amount = tester.getRect(find.byKey(const Key('amount')));
+      expect(amount.top, lessThan(meta.top), reason: 'số tiền cùng dòng với tiêu đề');
+      expect(meta.top, greaterThanOrEqualTo(title.bottom));
+      expect(meta.left, title.left);
+      expect(meta.right, greaterThan(amount.left), reason: 'dòng phụ chạy dưới cả cột số tiền');
+      final metaParagraph = tester.renderObject<RenderParagraph>(find.byKey(const Key('meta')));
+      expect(metaParagraph.size.height, lessThan(20), reason: 'một dòng ở 390 dp');
+    });
+
+    testWidgets('360 dp: tiêu đề dài xếp chồng (không cắt chữ), tiêu đề ngắn vẫn cạnh số tiền', (tester) async {
+      _phone(tester);
+      await tester.pumpWidget(
+        _app(
+          Column(
+            children: [
+              MoneyRow(
+                leading: const LeadingDisc(icon: Icons.north_east),
+                title: const Text('CHUYEN TIEN CHO NGUYEN VAN NAM', key: Key('long')),
+                meta: const Text('VCB chính · 20:45 · SePay', key: Key('long_meta')),
+                amount: const MoneyText(-3500000, key: Key('long_amount'), style: MoneyStyle.list),
+              ),
+              MoneyRow(
+                leading: const LeadingDisc(icon: Icons.savings_outlined),
+                title: const Text('Tiền trọ', key: Key('short')),
+                meta: const Text('Quỹ giữ · Thuê trọ', key: Key('short_meta')),
+                amount: const MoneyText(3000000, key: Key('short_amount'), style: MoneyStyle.list),
+              ),
+            ],
+          ),
+        ),
+      );
+      final longTitle = tester.renderObject<RenderParagraph>(find.byKey(const Key('long')));
+      expect(longTitle.didExceedMaxLines, isFalse);
+      expect(
+        tester.getRect(find.byKey(const Key('long_amount'))).top,
+        greaterThanOrEqualTo(tester.getRect(find.byKey(const Key('long_meta'))).bottom),
+      );
+      expect(
+        tester.getRect(find.byKey(const Key('short_amount'))).top,
+        lessThan(tester.getRect(find.byKey(const Key('short_meta'))).top),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     for (final scale in [1.3, 2.0]) {
       testWidgets('${(scale * 100).round()}%: số tiền dưới dòng phụ, căn phải, không tràn', (tester) async {
         _phone(tester);
@@ -405,6 +464,26 @@ void main() {
           colors: LevelColors.lerp(StatusColors.light.ok, StatusColors.light.danger, t),
         ).paint(Canvas(recorder), const Size(288, Ruler.tickHeight));
         recorder.endRecording().dispose();
+      }
+    });
+
+    test('chuyển OK → DANGER từng khung: không đoạn nào có bề rộng hay bán kính âm (đoạn thiếu rất hẹp)', () {
+      final a = RulerGeometry.compute(balance: 10000000, floor: 6000000, buffer: 600000);
+      // Giống bản demo: rút ATM rồi mua sắm, số dư xuống dưới mức sàn một chút (đoạn thiếu lớn dần từ 0).
+      final b = RulerGeometry.compute(balance: 5900000, floor: 6000000, buffer: 600000);
+      for (final width in [288.0, 296.0, 656.0]) {
+        for (var i = 0; i <= 500; i++) {
+          final canvas = _RecordingCanvas();
+          FloorRulerPainter(
+            geometry: RulerGeometry.lerp(a, b, i / 500),
+            colors: StatusColors.light.danger,
+          ).paint(canvas, Size(width, Ruler.tickHeight));
+          for (final r in canvas.rrects) {
+            expect(r.width, greaterThan(0), reason: 'w=$width t=${i / 500}');
+            expect(r.tlRadiusX, greaterThanOrEqualTo(0), reason: 'w=$width t=${i / 500}');
+            expect(r.tlRadiusX, lessThanOrEqualTo(r.width / 2 + 1e-9));
+          }
+        }
       }
     });
   });
@@ -554,7 +633,7 @@ void main() {
       expect(d.known, isTrue);
       final u = StatusHeroData.fromSummary(Summary.fromJson(unknownSummaryJson()));
       expect(u.known, isFalse);
-      expect(u.missingBalanceAccount, 'VCB chính · …6789');
+      expect(u.missingBalanceAccount, 'VCB chính ··6789');
     });
 
     testWidgets('trình đọc màn hình: tiêu đề là header, số đọc thành "… đồng", thước một nút', (tester) async {
@@ -798,4 +877,15 @@ void main() {
       expect(tester.getSize(find.byType(Pill)).height, greaterThanOrEqualTo(28));
     });
   });
+}
+
+/// Canvas ghi lại các hình bo tròn được vẽ (kiểm tra hình học của thước, không cần vẽ thật).
+class _RecordingCanvas implements Canvas {
+  final rrects = <RRect>[];
+
+  @override
+  void drawRRect(RRect rrect, Paint paint) => rrects.add(rrect);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }

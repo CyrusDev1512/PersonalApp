@@ -14,11 +14,14 @@ abstract final class HomeTab {
 /// (app vừa mở từ thông báo) được giữ lại tới khi HomeShell lấy.
 class HomeTabRequests extends ChangeNotifier {
   int? _pending;
+  bool _uncategorized = false;
 
   int? get pending => _pending;
 
-  void request(int index) {
+  /// [uncategorized]: mở tab Giao dịch với bộ lọc "Chưa phân loại" (vd. từ bản tin "3 giao dịch chưa phân loại").
+  void request(int index, {bool uncategorized = false}) {
     _pending = index;
+    _uncategorized = uncategorized && index == HomeTab.transactions;
     notifyListeners();
   }
 
@@ -27,5 +30,12 @@ class HomeTabRequests extends ChangeNotifier {
     final index = _pending;
     _pending = null;
     return index;
+  }
+
+  /// Yêu cầu vừa lấy có kèm bộ lọc "Chưa phân loại" không (lấy và xoá).
+  bool takeUncategorized() {
+    final value = _uncategorized;
+    _uncategorized = false;
+    return value;
   }
 }

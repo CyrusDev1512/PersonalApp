@@ -277,26 +277,46 @@ void main() {
       expect(await api.markAllAlertsRead(), 3);
     });
 
-    test('lỗi validate 422 của FastAPI -> thông báo dễ đọc', () async {
-      final server = FakeServer({
-        'POST /api/goals': (_) => jsonResponse({
-          'detail': [
-            {
-              'loc': ['body', 'amount'],
-              'msg': 'Input should be greater than 0',
-              'type': 'greater_than',
-            },
-          ],
-        }, 422),
-      });
-      await expectLater(
-        clientFor(server).createGoal(const GoalInput(name: 'x', type: 'reserve', amount: 1)),
-        throwsA(
-          isA<ApiException>()
-              .having((e) => e.statusCode, 'statusCode', 422)
-              .having((e) => e.message, 'message', 'amount: Input should be greater than 0'),
-        ),
-      );
+    test('lỗi validate 422 của FastAPI -> câu tiếng Việt (không đưa câu tiếng Anh của máy chủ ra)', () async {
+      Future<void> expectMessage(Map<String, Object?> error, String message) async {
+        final server = FakeServer({
+          'POST /api/goals': (_) => jsonResponse({
+            'detail': [error],
+          }, 422),
+        });
+        await expectLater(
+          clientFor(server).createGoal(const GoalInput(name: 'x', type: 'reserve', amount: 1)),
+          throwsA(
+            isA<ApiException>()
+                .having((e) => e.statusCode, 'statusCode', 422)
+                .having((e) => e.message, 'message', message),
+          ),
+        );
+      }
+
+      await expectMessage({
+        'loc': ['body', 'amount'],
+        'msg': 'Input should be greater than 0',
+        'type': 'greater_than',
+        'ctx': {'gt': 0},
+      }, 'Số tiền phải lớn hơn 0');
+      await expectMessage({
+        'loc': ['body', 'amount'],
+        'msg': 'Input should be less than or equal to 100000000000',
+        'type': 'less_than_equal',
+        'ctx': {'le': 100000000000},
+      }, 'Số tiền tối đa 100.000.000.000đ');
+      await expectMessage({
+        'loc': ['body', 'name'],
+        'msg': 'String should have at most 80 characters',
+        'type': 'string_too_long',
+        'ctx': {'max_length': 80},
+      }, 'Tên tối đa 80 ký tự');
+      await expectMessage({
+        'loc': ['body', 'weird'],
+        'msg': 'Something English',
+        'type': 'value_error',
+      }, 'weird không hợp lệ');
     });
 
     test('lỗi 400 với detail chuỗi tiếng Việt (UTF-8 không ghi charset)', () async {

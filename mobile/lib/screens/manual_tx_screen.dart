@@ -80,18 +80,30 @@ class _ManualTxScreenState extends State<ManualTxScreen> {
         : all.where((c) => c.isIncome || c.isExpense).toList();
   }
 
+  /// Chọn ngày giờ theo giờ Việt Nam (như danh sách giao dịch), không theo múi giờ của máy.
   Future<void> _pickTime() async {
+    final ict = toIct(_time);
+    final today = toIct(context.read<AppState>().now());
     final date = await showDatePicker(
       context: context,
-      initialDate: _time,
-      firstDate: DateTime(_time.year - 1),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
+      initialDate: DateTime(ict.year, ict.month, ict.day),
+      firstDate: DateTime(ict.year - 1),
+      lastDate: DateTime(today.year, today.month, today.day + 1),
     );
     if (date == null || !mounted) return;
-    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(_time));
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: ict.hour, minute: ict.minute),
+    );
     if (!mounted) return;
     setState(() {
-      _time = DateTime(date.year, date.month, date.day, time?.hour ?? _time.hour, time?.minute ?? _time.minute);
+      _time = DateTime.utc(
+        date.year,
+        date.month,
+        date.day,
+        time?.hour ?? ict.hour,
+        time?.minute ?? ict.minute,
+      ).subtract(ictOffset);
     });
   }
 
@@ -99,7 +111,7 @@ class _ManualTxScreenState extends State<ManualTxScreen> {
     final amount = parseVnd(v);
     if (amount == null) return 'Nhập số tiền';
     if (amount <= 0) return 'Số tiền phải lớn hơn 0';
-    return null;
+    return vndTooLarge(amount);
   }
 
   Future<void> _save() async {
@@ -197,6 +209,8 @@ class _ManualTxScreenState extends State<ManualTxScreen> {
                   ),
                   const SizedBox(height: Space.s2),
                   DropdownButtonFormField<int?>(
+                    // Chữ của ô chọn giống ô nhập (mặc định M3 là titleMedium, to hơn).
+                    style: Theme.of(context).textTheme.bodyLarge,
                     key: ValueKey('manual_category_$_direction${_categories == null ? '_loading' : ''}'),
                     initialValue: categoryValue,
                     isExpanded: true,
@@ -232,19 +246,21 @@ class _ManualTxScreenState extends State<ManualTxScreen> {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.schedule),
                     title: const Text('Thời gian'),
-                    subtitle: Text(formatDateTime(_time)),
+                    subtitle: Text('${formatDateTimeIct(_time)} (giờ Việt Nam)'),
                     trailing: const Icon(Icons.edit_calendar_outlined),
                     onTap: _saving ? null : _pickTime,
                   ),
                   const SizedBox(height: Space.s2),
                   DropdownButtonFormField<int?>(
+                    // Chữ của ô chọn giống ô nhập (mặc định M3 là titleMedium, to hơn).
+                    style: Theme.of(context).textTheme.bodyLarge,
                     initialValue: _accounts.any((a) => a.id == _accountId) ? _accountId : null,
                     isExpanded: true,
                     decoration: const InputDecoration(labelText: 'Tài khoản'),
                     items: [
                       const DropdownMenuItem<int?>(
                         value: null,
-                        child: Text('Tiền mặt / ngoài ngân hàng', overflow: TextOverflow.ellipsis),
+                        child: Text('Tiền mặt', overflow: TextOverflow.ellipsis),
                       ),
                       for (final a in _accounts)
                         DropdownMenuItem<int?>(

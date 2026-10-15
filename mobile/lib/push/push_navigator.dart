@@ -31,10 +31,10 @@ class PushNavigator {
     unawaited(state.load());
     final messenger = messengerKey.currentState;
     if (messenger == null) return;
-    // Gọn: tiêu đề + dòng đầu của nội dung (mỗi dòng tối đa 1 hàng); đầy đủ thì bấm "Xem". Emoji đầu tiêu đề
-    // (soạn cho Telegram) bỏ đi như ở tab Cảnh báo.
+    // Gọn: tiêu đề + dòng đầu của nội dung (mỗi dòng tối đa 1 hàng, bỏ giờ ở cuối để không bị cắt giữa giờ);
+    // đầy đủ thì bấm "Xem". Emoji đầu tiêu đề (soạn cho Telegram) bỏ đi như ở tab Cảnh báo.
     final title = stripLeadingEmoji(message.title?.trim() ?? '');
-    final firstLine = (message.body ?? '').trim().split('\n').first.trim();
+    final firstLine = alertSnippet(message.body ?? '');
     final heading = title.isNotEmpty ? title : (firstLine.isNotEmpty ? firstLine : 'Có cảnh báo mới');
     final detail = title.isNotEmpty ? firstLine : '';
     messenger

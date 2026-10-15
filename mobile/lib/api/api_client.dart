@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/models.dart';
+import '../utils/currency.dart';
 
 /// Lỗi khi gọi API, kèm thông báo tiếng Việt hiển thị được ngay.
 class ApiException implements Exception {
@@ -143,6 +144,63 @@ class ApiClient {
     return ApiException(status, message);
   }
 
+  /// Tên tiếng Việt của các trường trong lỗi validate (docs/api.md).
+  static const Map<String, String> _fieldLabels = {
+    'amount': 'Số tiền',
+    'name': 'Tên',
+    'opening_spent': 'Số đã chi trước khi dùng app',
+    'balance': 'Số dư',
+    'description': 'Nội dung',
+    'rule_pattern': 'Cụm từ nhận diện',
+    'pattern': 'Cụm từ nhận diện',
+    'bank': 'Ngân hàng',
+    'account_number': 'Số tài khoản',
+    'warning_percent': 'Phần trăm mức sàn',
+    'warning_min_amount': 'Vùng đệm tối thiểu',
+    'expected_income_amount': 'Số tiền lương',
+    'expected_income_day': 'Ngày nhận lương',
+    'month': 'Tháng',
+    'category_id': 'Danh mục',
+    'goal_id': 'Mục tiêu',
+    'token': 'Token',
+  };
+
+  /// Trường tiền (giới hạn ghi theo kiểu "100.000.000.000đ").
+  static const Set<String> _moneyFields = {
+    'amount',
+    'opening_spent',
+    'balance',
+    'warning_min_amount',
+    'expected_income_amount',
+  };
+
+  /// Một lỗi validate của FastAPI/pydantic (`type`, `loc`, `ctx`) thành câu tiếng Việt; không đưa câu tiếng Anh
+  /// của máy chủ ra giao diện.
+  static String _validationMessage(Map<dynamic, dynamic> item) {
+    final loc = item['loc'];
+    final key = loc is List && loc.isNotEmpty ? loc.last.toString() : '';
+    final field = _fieldLabels[key] ?? (key.isEmpty || key == 'body' ? 'Dữ liệu' : key);
+    final ctx = item['ctx'] is Map ? item['ctx'] as Map : const {};
+    String? value(String k) {
+      final v = ctx[k];
+      if (v == null) return null;
+      if (v is num && v != 0 && _moneyFields.contains(key)) return '${formatGrouped(v.toInt())}đ';
+      return '$v';
+    }
+
+    final message = switch (item['type']) {
+      'greater_than' => value('gt') == null ? null : '$field phải lớn hơn ${value('gt')}',
+      'greater_than_equal' => value('ge') == null ? null : '$field phải từ ${value('ge')} trở lên',
+      'less_than' => value('lt') == null ? null : '$field phải nhỏ hơn ${value('lt')}',
+      'less_than_equal' => value('le') == null ? null : '$field tối đa ${value('le')}',
+      'string_too_long' => value('max_length') == null ? null : '$field tối đa ${value('max_length')} ký tự',
+      'string_too_short' => value('min_length') == null ? null : '$field cần ít nhất ${value('min_length')} ký tự',
+      'missing' => 'Thiếu $field',
+      _ => null,
+    };
+    return message ?? '$field không hợp lệ';
+  }
+
   /// Lấy `detail` của FastAPI: chuỗi, hoặc danh sách lỗi validate.
   static String? _detailMessage(String text) {
     if (text.trim().isEmpty) return null;
@@ -152,17 +210,11 @@ class ApiClient {
       final detail = data['detail'];
       if (detail is String && detail.trim().isNotEmpty) return detail;
       if (detail is List) {
-        final parts = <String>[];
-        for (final item in detail) {
-          if (item is Map && item['msg'] != null) {
-            final loc = item['loc'];
-            final field = loc is List && loc.isNotEmpty ? loc.last.toString() : null;
-            parts.add(field == null ? item['msg'].toString() : '$field: ${item['msg']}');
-          } else if (item != null) {
-            parts.add(item.toString());
-          }
-        }
-        if (parts.isNotEmpty) return parts.join('; ');
+        final parts = <String>[
+          for (final item in detail)
+            if (item is Map) _validationMessage(item),
+        ];
+        if (parts.isNotEmpty) return parts.toSet().join('; ');
       }
     } on FormatException {
       return null;

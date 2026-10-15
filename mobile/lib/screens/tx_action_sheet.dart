@@ -9,6 +9,7 @@ import '../theme/status_colors.dart';
 import '../theme/tokens.dart';
 import '../theme/typography.dart';
 import '../utils/dates.dart';
+import '../utils/text.dart';
 import '../widgets/category_icon.dart';
 import '../widgets/common.dart';
 import '../widgets/form_parts.dart';
@@ -33,6 +34,8 @@ Future<TxSheetResult?> showTxActionSheet(
 }) {
   return showModalBottomSheet<TxSheetResult>(
     context: context,
+    // Đọc màn hình: vùng tối phía sau bảng là "Đóng" (mặc định Flutter đọc "Scrim", chưa dịch).
+    barrierLabel: 'Đóng',
     isScrollControlled: true,
     showDragHandle: true,
     useSafeArea: true,
@@ -122,11 +125,12 @@ class _TxActionSheetState extends State<TxActionSheet> {
   List<Category> get _choices =>
       tx.isOut ? _categories.where((c) => c.isExpense || c.isTransfer).toList() : [..._categories];
 
-  /// "Tiền trọ (11/2026)": mục tiêu giao dịch đang được gán.
-  String get _assignedGoalLabel {
-    final name = tx.goalName ?? 'Mục tiêu #${tx.goalId}';
-    return tx.goalMonth == null ? name : '$name (${shortMonthLabel(tx.goalMonth!)})';
-  }
+  /// "Tiền trọ": tên mục tiêu giao dịch đang được gán (bỏ "(YYYY-MM)" máy chủ gắn kèm).
+  String get _assignedGoalName => tx.goalName == null ? 'Mục tiêu #${tx.goalId}' : goalNameWithoutMonth(tx.goalName!);
+
+  /// "Tiền trọ (11/2026)": mục tiêu giao dịch đang được gán, tháng ghi một lần.
+  String get _assignedGoalLabel =>
+      tx.goalMonth == null ? _assignedGoalName : '$_assignedGoalName (${shortMonthLabel(tx.goalMonth!)})';
 
   bool get _categoryChanged => _categoryId != tx.categoryId;
 
@@ -140,7 +144,8 @@ class _TxActionSheetState extends State<TxActionSheet> {
       if (_categoryChanged || remember) 'category_id': _categoryId,
       if (remember) ...{'remember_rule': true, 'rule_pattern': _pattern.text.trim()},
       if (_goalId != tx.goalId) 'goal_id': _goalId,
-      if (_forNextMonth && _canCountLater) 'for_next_month': true,
+      // Loại trừ thì không tính cho mục tiêu nào (máy chủ áp loại trừ trước rồi mới gán tháng sau).
+      if (_forNextMonth && _canCountLater && !_excluded) 'for_next_month': true,
       if (_excluded != tx.isExcluded) 'excluded': _excluded,
     };
   }
@@ -235,6 +240,8 @@ class _TxActionSheetState extends State<TxActionSheet> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        // Chữ lớn (200%): nội dung cuộn được, không bị cắt mất câu cuối.
+        scrollable: true,
         title: const Text('Xoá giao dịch nhập tay?'),
         content: Text(
           '${MoneyParts.of(tx.amount, sign: tx.isOut ? MoneySign.outgoing : MoneySign.incoming).text} · ${tx.title}',
@@ -331,22 +338,33 @@ class _TxActionSheetState extends State<TxActionSheet> {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.event_available),
                       title: Text('Đã tính cho ${monthLabel(tx.goalMonth!).toLowerCase()}'),
-                      subtitle: Text('Mục tiêu: $_assignedGoalLabel'),
+                      subtitle: Text('Mục tiêu: $_assignedGoalName'),
                     )
                   else if (_canCountLater)
                     SwitchListTile(
+                      key: const Key('tx_for_next_month'),
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Tính cho tháng sau'),
-                      subtitle: const Text('VD: trả tiền trọ tháng sau từ cuối tháng này'),
-                      value: _forNextMonth,
-                      onChanged: _busy ? null : (v) => setState(() => _forNextMonth = v),
+                      subtitle: Text(
+                        _excluded
+                            ? 'Giao dịch loại trừ không tính cho mục tiêu nào'
+                            : 'VD: trả tiền trọ tháng sau từ cuối tháng này',
+                      ),
+                      value: _forNextMonth && !_excluded,
+                      onChanged: _busy || _excluded ? null : (v) => setState(() => _forNextMonth = v),
                     ),
                   SwitchListTile(
+                    key: const Key('tx_excluded'),
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Loại trừ'),
                     subtitle: const Text('Không tính giao dịch này vào chi tiêu và mục tiêu'),
                     value: _excluded,
-                    onChanged: _busy ? null : (v) => setState(() => _excluded = v),
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() {
+                            _excluded = v;
+                            if (v) _forNextMonth = false;
+                          }),
                   ),
                   if (tx.isManual) ...[
                     const SizedBox(height: Space.s4),
@@ -451,18 +469,20 @@ class _TxActionSheetState extends State<TxActionSheet> {
         ],
       );
     }
+    // Vùng chạm 48 dp của chip (cao 32 dp) đã tạo khoảng cách giữa các hàng: không cộng thêm runSpacing.
     return Wrap(
       spacing: Space.s2,
-      runSpacing: Space.s2,
       children: [
         for (final c in _choices)
           Builder(
             builder: (context) {
               final visual = CategoryVisual.of(c);
+              final selected = _categoryId == c.id;
               return ChoiceChip(
-                avatar: visual.chipAvatar(),
+                // Đang chọn: dấu tích thay chỗ icon danh mục (M3), không vẽ chồng lên icon.
+                avatar: selected ? null : visual.chipAvatar(),
                 label: Text(visual.label(c.name)),
-                selected: _categoryId == c.id,
+                selected: selected,
                 onSelected: _busy
                     ? null
                     : (sel) => setState(() {
@@ -485,6 +505,8 @@ class _TxActionSheetState extends State<TxActionSheet> {
       return [
         const SizedBox(height: Space.s4),
         DropdownButtonFormField<int?>(
+          // Chữ của ô chọn giống ô nhập (mặc định M3 là titleMedium, to hơn).
+          style: Theme.of(context).textTheme.bodyLarge,
           items: const [],
           onChanged: null,
           decoration: const InputDecoration(labelText: 'Gán vào mục tiêu', helperText: 'Đang tải mục tiêu…'),
@@ -507,6 +529,8 @@ class _TxActionSheetState extends State<TxActionSheet> {
     return [
       const SizedBox(height: Space.s4),
       DropdownButtonFormField<int?>(
+        // Chữ của ô chọn giống ô nhập (mặc định M3 là titleMedium, to hơn).
+        style: Theme.of(context).textTheme.bodyLarge,
         key: const Key('tx_goal'),
         initialValue: _goalId,
         isExpanded: true,

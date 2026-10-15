@@ -8,6 +8,8 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../theme/typography.dart';
 import '../utils/dates.dart';
+import '../utils/text.dart';
+import '../widgets/adaptive.dart';
 import '../widgets/category_icon.dart';
 import '../widgets/common.dart';
 import '../widgets/list_group.dart';
@@ -284,7 +286,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final pending = context.select<AppState, int>((s) => s.summary?.uncategorizedCount ?? 0);
     final count = summaryMonth == _month ? pending : 0;
     return Scaffold(
-      appBar: AppBar(title: const Text('Giao dịch')),
+      appBar: const ContentAppBar(title: Text('Giao dịch')),
+      floatingActionButtonLocation: ContentFabLocation.of(context),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addManual,
         backgroundColor: AppButtonStyles.secondaryFabBackground(scheme),
@@ -292,68 +295,74 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         icon: const Icon(Icons.edit_note),
         label: const Text('Nhập tay'),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(gutter - Space.s2, 0, gutter, Space.s2),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: Space.s2,
-              runSpacing: Space.s1,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+      // Phím Tab đi hết nội dung rồi mới tới FAB; cửa sổ rộng: cột 720 dp ở giữa.
+      body: FocusTraversalGroup(
+        child: ContentColumn(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(gutter - Space.s2, 0, gutter, Space.s2),
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: Space.s2,
+                  runSpacing: Space.s1,
                   children: [
-                    IconButton(
-                      tooltip: 'Tháng trước',
-                      onPressed: () => _changeMonth(-1),
-                      icon: const Icon(Icons.chevron_left),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Tháng trước',
+                          onPressed: () => _changeMonth(-1),
+                          icon: const Icon(Icons.chevron_left),
+                        ),
+                        Text(monthLabel(_month), style: theme.textTheme.titleSmall),
+                        IconButton(
+                          tooltip: 'Tháng sau',
+                          onPressed: canGoNext ? () => _changeMonth(1) : null,
+                          icon: const Icon(Icons.chevron_right),
+                        ),
+                      ],
                     ),
-                    Text(monthLabel(_month), style: theme.textTheme.titleSmall),
-                    IconButton(
-                      tooltip: 'Tháng sau',
-                      onPressed: canGoNext ? () => _changeMonth(1) : null,
-                      icon: const Icon(Icons.chevron_right),
+                    Padding(
+                      padding: const EdgeInsets.only(left: Space.s2),
+                      child: Wrap(
+                        spacing: Space.s2,
+                        children: [
+                          FilterChip(
+                            key: const Key('filter_all'),
+                            label: const Text('Tất cả'),
+                            selected: !_uncategorized,
+                            onSelected: (_) => _setFilter(false),
+                          ),
+                          FilterChip(
+                            key: const Key('filter_uncategorized'),
+                            label: Text(count > 0 ? 'Chưa phân loại · $count' : 'Chưa phân loại'),
+                            selected: _uncategorized,
+                            onSelected: _setFilter,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
+              ),
+              // Tải lại lỗi khi vẫn còn danh sách cũ (cùng tháng/bộ lọc): dải trung tính, số liệu cũ vẫn xem được.
+              if (_error != null && _items.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(left: Space.s2),
-                  child: Wrap(
-                    spacing: Space.s2,
-                    children: [
-                      FilterChip(
-                        key: const Key('filter_all'),
-                        label: const Text('Tất cả'),
-                        selected: !_uncategorized,
-                        onSelected: (_) => _setFilter(false),
-                      ),
-                      FilterChip(
-                        key: const Key('filter_uncategorized'),
-                        label: Text(count > 0 ? 'Chưa phân loại · $count' : 'Chưa phân loại'),
-                        selected: _uncategorized,
-                        onSelected: _setFilter,
-                      ),
-                    ],
+                  padding: EdgeInsets.fromLTRB(gutter, 0, gutter, Space.s2),
+                  child: OfflineStrip(
+                    key: const Key('tx_reload_error'),
+                    icon: Icons.sync_problem,
+                    title: 'Không tải lại được: $_error',
+                    onRetry: _load,
                   ),
                 ),
-              ],
-            ),
+              Expanded(child: _buildList(gutter)),
+            ],
           ),
-          // Tải lại lỗi khi vẫn còn danh sách cũ (cùng tháng/bộ lọc): dải trung tính, số liệu cũ vẫn xem được.
-          if (_error != null && _items.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.fromLTRB(gutter, 0, gutter, Space.s2),
-              child: OfflineStrip(
-                key: const Key('tx_reload_error'),
-                icon: Icons.sync_problem,
-                title: 'Không tải lại được: $_error',
-                onRetry: _load,
-              ),
-            ),
-          Expanded(child: _buildList(gutter)),
-        ],
+        ),
       ),
     );
   }
@@ -587,7 +596,9 @@ class TxTile extends StatelessWidget {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     final meta = metaFor(tx);
-    final goal = tx.goalName ?? (tx.goalId == null ? null : 'Mục tiêu #${tx.goalId}');
+    final goal = tx.goalName != null
+        ? goalNameWithoutMonth(tx.goalName!)
+        : (tx.goalId == null ? null : 'Mục tiêu #${tx.goalId}');
     final goalText = goal == null
         ? null
         : (tx.goalMonth != null && tx.goalMonth != tx.month ? '$goal · ${shortMonthLabel(tx.goalMonth!)}' : goal);
@@ -599,7 +610,8 @@ class TxTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (meta.isNotEmpty) Text(meta, maxLines: 2, overflow: TextOverflow.ellipsis),
+          // Rộng hết hàng (không bị bóp cạnh số tiền) và không cắt: giờ và nguồn luôn đọc được.
+          if (meta.isNotEmpty) Text(meta),
           if (goalText != null)
             Row(
               children: [

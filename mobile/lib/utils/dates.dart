@@ -53,10 +53,6 @@ String monthShortLabel(String month, [DateTime? now]) {
   return current != null && current.$1 == year ? 'Tháng $mon' : 'Tháng $mon/$year';
 }
 
-/// Giờ của máy dạng "09:59 14/10/2026" (chỉ dùng cho giờ người dùng tự chọn trên máy, vd. ô "Thời gian"
-/// khi nhập tay). Giờ từ máy chủ luôn hiện theo giờ Việt Nam: [formatDateTimeIct].
-String formatDateTime(DateTime dt) => DateFormat('HH:mm dd/MM/yyyy', 'vi_VN').format(dt.toLocal());
-
 /// Thời điểm [dt] đọc theo giờ Việt Nam (ICT): kết quả là DateTime UTC đã cộng 7 giờ, chỉ dùng để lấy
 /// ngày/giờ hiển thị, không dùng để so sánh thời điểm.
 DateTime toIct(DateTime dt) => dt.toUtc().add(ictOffset);

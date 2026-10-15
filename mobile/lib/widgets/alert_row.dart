@@ -50,8 +50,12 @@ class AlertDisc extends StatelessWidget {
   }
 }
 
-/// Một hàng cảnh báo (DESIGN.md › Alert row): đĩa theo mức, tiêu đề (đậm khi chưa đọc), nội dung 2 dòng,
-/// giờ "14:32" (giờ Việt Nam; ngày nằm ở tiêu đề nhóm) và chấm chưa đọc. Không viền màu.
+/// Một hàng cảnh báo (DESIGN.md › Alert row): đĩa theo mức, tiêu đề (đậm khi chưa đọc), nội dung 2 dòng (đã bỏ
+/// emoji đầu dòng và lời nhắc lệnh bot), giờ "14:32" (giờ Việt Nam; ngày nằm ở tiêu đề nhóm) và chấm chưa đọc.
+/// Không viền màu.
+///
+/// Chữ lớn hơn 125%: giờ và chấm chưa đọc xuống dưới tiêu đề, tiêu đề rộng hết hàng và được nhiều dòng hơn (như
+/// quy tắc chữ lớn của MoneyRow), để tiêu đề ngắn không bị cắt.
 class AlertRow extends StatelessWidget {
   const AlertRow({super.key, required this.alert, this.onTap});
 
@@ -63,8 +67,68 @@ class AlertRow extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final text = theme.textTheme;
+    final large = AppLayout.isLargeText(MediaQuery.textScalerOf(context));
     final time = alert.createdAt == null ? null : formatTimeIct(alert.createdAt!);
-    final message = alert.message.trim();
+    final message = cleanAlertMessage(alert.message);
+    final timeText = time == null ? null : Text(time, style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant));
+    final dot = alert.read
+        ? null
+        : Semantics(
+            label: 'Chưa đọc',
+            child: Container(
+              key: ValueKey('alert_unread_${alert.id}'),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
+            ),
+          );
+    final title = Text(
+      alertDisplayTitle(alert),
+      maxLines: large ? 4 : 2,
+      overflow: TextOverflow.ellipsis,
+      style: text.titleMedium?.copyWith(
+        color: scheme.onSurface,
+        fontWeight: alert.read ? FontWeight.w500 : FontWeight.w700,
+      ),
+    );
+    final body = message.isEmpty
+        ? null
+        : Text(
+            message,
+            maxLines: large ? 3 : 2,
+            overflow: TextOverflow.ellipsis,
+            style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+          );
+    final List<Widget> children;
+    if (large) {
+      children = [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              title,
+              if (timeText != null || dot != null)
+                Wrap(spacing: Space.s2, crossAxisAlignment: WrapCrossAlignment.center, children: [?timeText, ?dot]),
+              ?body,
+            ],
+          ),
+        ),
+      ];
+    } else {
+      children = [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [title, ?body]),
+        ),
+        const SizedBox(width: Space.s3),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            ?timeText,
+            if (dot != null) ...[const SizedBox(height: Space.s2), dot],
+          ],
+        ),
+      ];
+    }
     return MergeSemantics(
       child: Semantics(
         button: onTap != null,
@@ -79,48 +143,7 @@ class AlertRow extends StatelessWidget {
                 children: [
                   AlertDisc(alert: alert),
                   const SizedBox(width: Space.s4),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          alertDisplayTitle(alert),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.titleMedium?.copyWith(
-                            color: scheme.onSurface,
-                            fontWeight: alert.read ? FontWeight.w500 : FontWeight.w700,
-                          ),
-                        ),
-                        if (message.isNotEmpty)
-                          Text(
-                            message,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: Space.s3),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (time != null) Text(time, style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-                      if (!alert.read) ...[
-                        const SizedBox(height: Space.s2),
-                        Semantics(
-                          label: 'Chưa đọc',
-                          child: Container(
-                            key: ValueKey('alert_unread_${alert.id}'),
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                  ...children,
                 ],
               ),
             ),

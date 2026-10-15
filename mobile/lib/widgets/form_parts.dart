@@ -187,9 +187,11 @@ class AdaptiveSegmentedButton<T> extends StatelessWidget {
       builder: (context, constraints) {
         final per = constraints.maxWidth / choices.length;
         final vertical = choices.any((c) => segmentWidthFor(context, c.label) > per);
-        return SegmentedButton<T>(
+        final button = SegmentedButton<T>(
           direction: vertical ? Axis.vertical : Axis.horizontal,
-          expandedInsets: EdgeInsets.zero,
+          // Ngang: chia đều bề rộng. Dọc: rộng hết hàng nhờ ràng buộc bề rộng chặt bên dưới (expandedInsets
+          // theo chiều dọc sẽ đòi chiều cao vô hạn trong danh sách cuộn).
+          expandedInsets: vertical ? null : EdgeInsets.zero,
           segments: [
             for (final c in choices)
               ButtonSegment<T>(
@@ -201,6 +203,7 @@ class AdaptiveSegmentedButton<T> extends StatelessWidget {
           selected: {selected},
           onSelectionChanged: onChanged == null ? null : (s) => onChanged!(s.first),
         );
+        return vertical ? SizedBox(width: constraints.maxWidth, child: button) : button;
       },
     );
   }
@@ -218,6 +221,23 @@ class FieldLabel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: Space.s2),
       child: Text(text, style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.onSurface)),
+    );
+  }
+}
+
+/// Dòng giải thích dưới một điều khiển không phải ô nhập (nút phân đoạn "Quỹ giữ / Ngân sách"…): `bodySmall`
+/// `onSurfaceVariant`, thụt vào bằng đệm trong của ô nhập (16 dp) để thẳng hàng với chữ hỗ trợ của các ô nhập.
+class SupportingText extends StatelessWidget {
+  const SupportingText(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: Space.s4),
+      child: Text(text, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
     );
   }
 }

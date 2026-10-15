@@ -35,7 +35,17 @@ void main() {
     final semantics = tester.ensureSemantics();
     await _pumpDemo(tester);
 
-    expect(find.bySemanticsLabel('Bản dùng thử · dữ liệu giả'), findsOneWidget);
+    // Nhãn là một nút đọc màn hình; nút demo màu celadon (tertiary), không dùng men lam của "Thêm mục tiêu".
+    expect(find.bySemanticsLabel('Bản dùng thử, dữ liệu giả'), findsOneWidget);
+    final demoButton = tester.widget<FilledButton>(find.byKey(const Key('demo_simulate')));
+    final scheme = Theme.of(tester.element(find.byKey(const Key('demo_simulate')))).colorScheme;
+    expect(demoButton.style?.backgroundColor?.resolve({}), scheme.tertiary);
+    // 390 dp: nhãn và nút không vừa một hàng, nút xuống hàng thứ hai (không cắt chữ), vùng chạm 48 dp.
+    expect(tester.getSize(find.byKey(const Key('demo_simulate'))).height, greaterThanOrEqualTo(48));
+    expect(
+      tester.getRect(find.byKey(const Key('demo_simulate'))).top,
+      greaterThan(tester.getRect(find.byIcon(Icons.science_outlined)).bottom),
+    );
     expect(find.text('Giả lập biến động số dư'), findsOneWidget);
     expect(find.text('Tổng quan'), findsWidgets);
     expect(find.text('An toàn'), findsOneWidget);
@@ -61,7 +71,7 @@ void main() {
     expect(find.byKey(const Key('push_snackbar')), findsOneWidget);
     // SnackBar gọn: tiêu đề + dòng đầu của nội dung, "Xem" để đọc đủ.
     expect(
-      find.descendant(of: find.byKey(const Key('push_snackbar')), matching: find.text('⚠️ Sắp chạm mức mục tiêu')),
+      find.descendant(of: find.byKey(const Key('push_snackbar')), matching: find.text('Sắp chạm mức mục tiêu')),
       findsOneWidget,
     );
     expect(
@@ -71,7 +81,10 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Sắp chạm mức mục tiêu'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byKey(const Key('status_hero')), matching: find.text('Sắp chạm mức mục tiêu')),
+      findsOne,
+    );
     expect(find.text('500.000đ'), findsWidgets);
     semantics.dispose();
   });
@@ -81,15 +94,19 @@ void main() {
     await _pumpDemo(tester);
     await tester.tap(find.text('Cài đặt'));
     await tester.pumpAndSettle();
+    // Mục "Máy chủ" nằm cuối Cài đặt (ít dùng): cuộn tới.
+    await tester.scrollUntilVisible(find.text('Ngắt kết nối'), 300, scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Ngắt kết nối'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Ngắt kết nối'));
     await tester.pumpAndSettle();
 
     expect(find.byType(ConnectScreen), findsOneWidget);
-    expect(find.text('Bản dùng thử\nđã ngắt kết nối'), findsOneWidget);
-    // Màn 390 px: chữ nút ngắn để nhãn bên trái không bị cắt, nhưng trình đọc màn hình vẫn nghe đủ câu.
-    expect(find.descendant(of: find.byKey(const Key('demo_reconnect')), matching: find.text('Kết nối lại')), findsOne);
+    // Màn 390 px: nút xuống hàng thứ hai nên giữ đủ chữ, không rút gọn.
+    expect(
+      find.descendant(of: find.byKey(const Key('demo_reconnect')), matching: find.text('Kết nối lại bản dùng thử')),
+      findsOne,
+    );
     expect(find.bySemanticsLabel('Kết nối lại bản dùng thử'), findsOneWidget);
     await tester.tap(find.byKey(const Key('demo_reconnect')));
     await tester.pumpAndSettle();
@@ -148,11 +165,15 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byKey(const Key('rail_add_goal')), findsOneWidget);
     expect(find.widgetWithText(FloatingActionButton, 'Thêm mục tiêu'), findsOneWidget);
-    // Nội dung không kéo giãn: cột tối đa 720 dp, căn giữa phần còn lại bên phải rail.
+    // Nội dung không kéo giãn: thân màn là cột tối đa 720 dp, căn giữa phần còn lại bên phải rail; app bar rộng
+    // hết phần đó, tiêu đề thẳng mép trái của nội dung.
     final rail = tester.getRect(find.byType(NavigationRail));
     final appBar = tester.getRect(find.widgetWithText(AppBar, 'Tổng quan'));
-    expect(appBar.width, lessThanOrEqualTo(720));
-    expect(appBar.center.dx, moreOrLessEquals((rail.right + 1280) / 2, epsilon: 1));
+    expect(appBar.left, rail.right);
+    expect(appBar.right, 1280);
+    final hero = tester.getRect(find.byKey(const ValueKey('dashboard_hero')));
+    expect(hero.width, lessThanOrEqualTo(720));
+    expect(hero.center.dx, moreOrLessEquals((rail.right + 1280) / 2, epsilon: 1));
     // Thanh demo vẫn trải hết bề ngang, nút giả lập ở cuối thanh.
     final banner = tester.getRect(find.byKey(const Key('demo_simulate')));
     expect(banner.right, greaterThan(1280 - 200));

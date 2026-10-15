@@ -105,14 +105,22 @@ class GoalRow extends StatelessWidget {
       key: ValueKey('goal_row_${goal.id}'),
       leading: LeadingDisc(icon: goal.isReserve ? Icons.savings_outlined : Icons.shopping_basket_outlined),
       title: Text(goal.name),
-      meta: Row(
-        children: [
-          Flexible(child: Text('${goal.typeLabel} · $_category')),
-          if (goal.repeatMonthly) ...[
-            const SizedBox(width: Space.s1),
-            Icon(Icons.repeat, size: 16, color: scheme.onSurfaceVariant),
+      // Icon "lặp lại" nằm ngay sau chữ (cùng dòng cuối khi chữ xuống dòng), không trôi ra mép phải.
+      meta: Text.rich(
+        TextSpan(
+          children: [
+            // U+2060 (word joiner): icon "lặp lại" không bao giờ bị đẩy một mình xuống dòng mới.
+            TextSpan(text: '${goal.typeLabel} · $_category${goal.repeatMonthly ? '\u2060' : ''}'),
+            if (goal.repeatMonthly)
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(start: Space.s1),
+                  child: Icon(Icons.repeat, size: 16, color: scheme.onSurfaceVariant),
+                ),
+              ),
           ],
-        ],
+        ),
       ),
       amount: MoneyText(goal.remaining, style: MoneyStyle.list),
       amountCaption: _paidOff

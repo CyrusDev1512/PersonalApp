@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../theme/status_colors.dart';
 import '../theme/tokens.dart';
 import '../utils/currency.dart';
+import '../widgets/adaptive.dart';
 import '../widgets/account_dialog.dart';
 import '../widgets/account_row.dart';
 import '../widgets/common.dart';
@@ -219,6 +220,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        // Chữ lớn (200%): nội dung cuộn được, không bị cắt mất câu cuối.
+        scrollable: true,
         title: const Text('Ngắt kết nối?'),
         content: const Text('App sẽ quên địa chỉ máy chủ và token trên máy này. Dữ liệu trên máy chủ không bị xoá.'),
         actions: [
@@ -255,38 +258,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final theme = Theme.of(context);
     final gutter = Gutter.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Cài đặt')),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        // Một Form cho các ô số của "Cảnh báo" và "Lương dự kiến" (một nút "Lưu cài đặt").
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(gutter, 0, gutter, Space.s8),
-            children: [
-              const SectionHeader('Tài khoản', first: true),
-              _buildAccounts(client),
-              const SectionHeader('Cảnh báo'),
-              ..._buildAlertSettings(theme),
-              const SectionHeader('Lương dự kiến'),
-              ..._buildIncome(theme),
-              const SectionHeader('Thông báo đẩy'),
-              const _PushSection(),
-              const SectionHeader('Máy chủ'),
-              ..._buildServer(theme, client),
-              const SectionHeader('Giới thiệu'),
-              ListGroup(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.description_outlined),
-                    title: const Text('Giấy phép mã nguồn mở'),
-                    subtitle: const Text('Phông chữ Be Vietnam Pro (SIL OFL 1.1) và các thư viện'),
-                    onTap: () => showLicensePage(context: context, applicationName: 'Chi tiêu'),
-                  ),
-                ],
-              ),
-            ],
+      appBar: const ContentAppBar(title: Text('Cài đặt')),
+      body: ContentColumn(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          // Một Form cho các ô số của "Cảnh báo" và "Lương dự kiến" (một nút "Lưu cài đặt").
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(gutter, Space.s2, gutter, Space.s8),
+              children: [
+                const SectionHeader('Tài khoản', first: true),
+                _buildAccounts(client),
+                const SectionHeader('Cảnh báo'),
+                ..._buildAlertSettings(theme),
+                const SectionHeader('Lương dự kiến'),
+                ..._buildIncome(theme),
+                const SectionHeader('Thông báo đẩy'),
+                const _PushSection(),
+                const SectionHeader('Máy chủ'),
+                ..._buildServer(theme, client),
+                const SectionHeader('Giới thiệu'),
+                ListGroup(
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.description_outlined),
+                      title: const Text('Giấy phép mã nguồn mở'),
+                      subtitle: const Text('Phông chữ Be Vietnam Pro (SIL OFL 1.1) và các thư viện'),
+                      onTap: () => showLicensePage(context: context, applicationName: 'Chi tiêu'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -361,7 +366,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       enabled: !_saving,
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
-      decoration: const InputDecoration(labelText: 'Vùng đệm theo % mức sàn', suffixText: '%'),
+      style: _numberStyle(context),
+      decoration: _numberDecoration(context, label: 'Phần trăm mức sàn', suffix: '%'),
       validator: _validatePercent,
     );
     final minField = MoneyField(
@@ -402,7 +408,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return null;
   }
 
-  String? _validateMin(String? v) => parseVnd(v) == null ? 'Nhập số tiền (có thể là 0)' : null;
+  String? _validateMin(String? v) {
+    final amount = parseVnd(v);
+    if (amount == null) return 'Nhập số tiền (có thể là 0)';
+    return vndTooLarge(amount, max: _maxBufferAmount);
+  }
+
+  /// Vùng đệm tối thiểu lớn nhất máy chủ nhận (backend: `le=1_000_000_000`).
+  static const int _maxBufferAmount = 1000000000;
+
+  String? _validateIncome(String? v) => vndTooLarge(parseVnd(v));
 
   String? _validateDay(String? v) {
     final amount = parseVnd(_incomeAmount.text) ?? 0;
@@ -416,6 +431,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool get _fieldsValid =>
       _validatePercent(_warningPercent.text) == null &&
       _validateMin(_warningMin.text) == null &&
+      _validateIncome(_incomeAmount.text) == null &&
       _validateDay(_incomeDay.text) == null;
 
   /// Hai ô của "Lương dự kiến" (cùng Form với vùng đệm: một nút "Lưu cài đặt" cho cả hai nhóm).
@@ -426,6 +442,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       enabled: !_saving,
       label: 'Số tiền lương',
       hint: 'Để trống = không dùng',
+      validator: _validateIncome,
     ),
     TextFormField(
       key: const Key('settings_income_day'),
@@ -433,7 +450,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       enabled: !_saving,
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
-      decoration: const InputDecoration(labelText: 'Ngày nhận', hintText: 'VD: 5'),
+      style: _numberStyle(context),
+      decoration: _numberDecoration(context, label: 'Ngày nhận', hint: 'VD: 5'),
       validator: _validateDay,
     ),
   );
@@ -501,6 +519,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ];
   }
 }
+
+/// Ô số không phải tiền (vùng đệm %, ngày nhận lương): chữ `titleMedium` thường (số tiền mới dùng chữ số to
+/// `moneyInput`), nhưng cao 64 dp như ô tiền đặt cạnh để hai ô thẳng hàng.
+TextStyle _numberStyle(BuildContext context) =>
+    Theme.of(context).textTheme.titleMedium!.copyWith(color: Theme.of(context).colorScheme.onSurface);
+
+InputDecoration _numberDecoration(BuildContext context, {required String label, String? suffix, String? hint}) =>
+    InputDecoration(
+      labelText: label,
+      hintText: hint,
+      suffixText: suffix,
+      suffixStyle: Theme.of(context).textTheme.titleMedium!.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      constraints: const BoxConstraints(minHeight: 64),
+      contentPadding: const EdgeInsets.symmetric(horizontal: Space.s4, vertical: Space.s5),
+    );
 
 /// Hai ô cạnh nhau khi đủ rộng (≥ 400 dp), xếp chồng khi hẹp.
 Widget _pair(Widget a, Widget b, {required (int, int) flex}) => LayoutBuilder(
@@ -592,6 +627,8 @@ class _PushSectionState extends State<_PushSection> {
           children: [
             ListTile(
               key: const Key('push_status'),
+              // Hàng nhiều dòng: icon đứng ở đầu như chữ, không trôi giữa hàng.
+              titleAlignment: ListTileTitleAlignment.top,
               leading: SizedBox(
                 width: AppLayout.listLeadingSize,
                 child: Center(child: Icon(icon, color: color)),

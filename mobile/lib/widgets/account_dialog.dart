@@ -15,6 +15,8 @@ const Map<String, String> bankChoices = {'VCB': 'Vietcombank (VCB)', 'MB': 'MB B
 
 Future<T?> _showFormSheet<T>(BuildContext context, WidgetBuilder builder) => showModalBottomSheet<T>(
   context: context,
+  // Đọc màn hình: vùng tối phía sau bảng là "Đóng" (mặc định Flutter đọc "Scrim", chưa dịch).
+  barrierLabel: 'Đóng',
   isScrollControlled: true,
   showDragHandle: true,
   useSafeArea: true,
@@ -163,6 +165,8 @@ class _AccountFormSheetState extends State<AccountFormSheet> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        // Chữ lớn (200%): nội dung cuộn được, không bị cắt mất câu cuối.
+        scrollable: true,
         title: const Text('Xoá tài khoản?'),
         content: Text('Xoá "${a.displayName}". Chỉ xoá được tài khoản chưa có giao dịch.'),
         actions: [
@@ -221,13 +225,28 @@ class _AccountFormSheetState extends State<AccountFormSheet> {
                       ),
                     ),
                     const SizedBox(height: Space.s5),
+                    // Sửa: ngân hàng không đổi được nên là chữ chỉ đọc (nhãn nhỏ + tên), không phải ô bị khoá.
                     if (_editing)
-                      InputDecorator(
-                        decoration: const InputDecoration(labelText: 'Ngân hàng', enabled: false),
-                        child: Text(bankLabelOf(a!.bank), style: theme.textTheme.bodyLarge),
+                      MergeSemantics(
+                        child: Column(
+                          key: const Key('account_bank_readonly'),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Ngân hàng',
+                              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                            ),
+                            Text(
+                              bankLabelOf(a!.bank),
+                              style: theme.textTheme.titleMedium?.copyWith(color: scheme.onSurface),
+                            ),
+                          ],
+                        ),
                       )
                     else
                       DropdownButtonFormField<String>(
+                        // Chữ của ô chọn giống ô nhập (mặc định M3 là titleMedium, to hơn).
+                        style: Theme.of(context).textTheme.bodyLarge,
                         initialValue: _bank,
                         isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Ngân hàng'),

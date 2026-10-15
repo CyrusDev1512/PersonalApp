@@ -31,7 +31,9 @@ class ListGroup extends StatelessWidget {
         // Trang trí: các hàng đã tách nhau bằng khoảng cách và chữ.
         items.add(const ExcludeSemantics(child: Divider(indent: dividerIndent)));
       }
-      items.add(children[i]);
+      // Mỗi hàng là một nút đọc màn hình riêng: ListTile (và hàng có câu hỏi + nút) không tự tạo nút, nên
+      // nếu không bọc thì nhãn và thao tác chạm của nó dính vào cả nhóm, đọc sai thứ tự.
+      items.add(Semantics(container: true, child: children[i]));
     }
     return DecoratedBox(
       decoration: decoration(context),

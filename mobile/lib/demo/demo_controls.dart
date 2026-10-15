@@ -162,6 +162,8 @@ class _DemoBannerState extends State<DemoBanner> {
         backgroundColor: scheme.tertiary,
         foregroundColor: scheme.onTertiary,
         padding: const EdgeInsetsDirectional.only(start: Space.s4, end: Space.s6),
+        // Viên nút 40 dp trong vùng chạm 48 dp: dải có khoảng thở trên dưới, nút không dính mép dải.
+        minimumSize: const Size(64, _buttonVisualHeight),
         tapTargetSize: MaterialTapTargetSize.padded,
       ),
       icon: Icon(connected ? Icons.bolt : Icons.link, size: 18),
@@ -206,15 +208,20 @@ class _DemoBannerState extends State<DemoBanner> {
               final labelWidth = 18 + Space.s2 + textWidth(labelText);
               final buttonWidth = Space.s4 + 18 + Space.s2 + textWidth(buttonText) + Space.s6;
               final oneRow = labelWidth + Space.s4 + buttonWidth <= constraints.maxWidth;
+              // Vùng chạm 48 dp + 4 dp mỗi phía: viên nút 40 dp cách mép dải 8 dp (một hàng: dải 56 dp).
+              final paddedButton = Padding(
+                padding: const EdgeInsets.symmetric(vertical: Space.s1),
+                child: button,
+              );
               if (oneRow) {
                 return ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: AppLayout.touchTargetMin),
+                  constraints: const BoxConstraints(minHeight: AppLayout.touchTargetMin + Space.s2),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Flexible(child: label),
                       const SizedBox(width: Space.s4),
-                      button,
+                      paddedButton,
                     ],
                   ),
                 );
@@ -223,10 +230,10 @@ class _DemoBannerState extends State<DemoBanner> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(top: Space.s3, bottom: Space.s1),
+                    padding: const EdgeInsets.only(top: Space.s3),
                     child: Align(alignment: AlignmentDirectional.centerStart, child: label),
                   ),
-                  Align(alignment: AlignmentDirectional.centerEnd, child: button),
+                  Align(alignment: AlignmentDirectional.centerEnd, child: paddedButton),
                 ],
               );
             },
@@ -236,6 +243,9 @@ class _DemoBannerState extends State<DemoBanner> {
     );
   }
 }
+
+/// Chiều cao viên nút demo (vùng chạm vẫn 48 dp nhờ `MaterialTapTargetSize.padded`).
+const double _buttonVisualHeight = 40;
 
 /// Thao tác chọn trong bảng giả lập.
 sealed class DemoSheetAction {
@@ -318,6 +328,8 @@ const List<_Preset> _presets = [
 Future<DemoSheetAction?> showDemoSimulateSheet(BuildContext context, {required DemoBackend backend}) {
   return showModalBottomSheet<DemoSheetAction>(
     context: context,
+    // Đọc màn hình: vùng tối phía sau bảng là "Đóng" (mặc định Flutter đọc "Scrim", chưa dịch).
+    barrierLabel: 'Đóng',
     isScrollControlled: true,
     showDragHandle: true,
     useSafeArea: true,
@@ -460,6 +472,8 @@ class _DemoSimulateSheetState extends State<DemoSimulateSheet> {
           ),
           const SizedBox(height: Space.s4),
           DropdownButtonFormField<int>(
+            // Chữ của ô chọn giống ô nhập (mặc định M3 là titleMedium, to hơn).
+            style: Theme.of(context).textTheme.bodyLarge,
             key: const Key('demo_account'),
             initialValue: _accountId,
             isExpanded: true,

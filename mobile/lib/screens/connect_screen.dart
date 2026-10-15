@@ -218,13 +218,21 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 icon: _busy ? const BusyIcon() : const Icon(Icons.link),
                 label: const Text('Kiểm tra & kết nối'),
               ),
+              // Lỗi nằm ngay dưới bước bị lỗi (bước sau chưa chạy thì không đứng trên lỗi).
               if (steps != null) ...[
                 const SizedBox(height: Space.s5),
                 _StepLine(label: 'Máy chủ phản hồi (/health)', step: steps.$1),
+                if (_error != null && steps.$1 == _Step.failed) ...[
+                  const SizedBox(height: Space.s2),
+                  InlineError(_error!, key: const Key('connect_error')),
+                ],
                 const SizedBox(height: Space.s2),
                 _StepLine(label: 'Token hợp lệ (/api/summary)', step: steps.$2),
               ],
-              if (_error != null) ...[const SizedBox(height: Space.s4), InlineError(_error!)],
+              if (_error != null && (steps == null || steps.$1 != _Step.failed)) ...[
+                SizedBox(height: steps == null ? Space.s4 : Space.s2),
+                InlineError(_error!, key: const Key('connect_error')),
+              ],
             ],
           ),
         ),

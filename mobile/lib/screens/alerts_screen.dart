@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../utils/dates.dart';
+import '../widgets/adaptive.dart';
 import '../widgets/alert_detail_sheet.dart';
 import '../widgets/alert_row.dart';
 import '../widgets/common.dart';
@@ -127,46 +128,46 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final unreadCount = context.select<AppState, int>((s) => s.summary?.unreadAlerts ?? 0);
     final hasUnread = unreadCount > 0 || _alerts.any((a) => !a.read);
     return Scaffold(
-      appBar: AppBar(
+      // Chữ "Đọc hết" thẳng mép phải với nội dung (ContentAppBar chừa đệm cuối = lề − đệm trong của nút).
+      appBar: ContentAppBar(
         title: const Text('Cảnh báo'),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: Space.s2),
-            child: TextButton.icon(
-              onPressed: hasUnread && !_busy ? _readAll : null,
-              icon: const Icon(Icons.done_all),
-              label: const Text('Đọc hết'),
-            ),
+          TextButton.icon(
+            onPressed: hasUnread && !_busy ? _readAll : null,
+            icon: const Icon(Icons.done_all),
+            label: const Text('Đọc hết'),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(gutter, 0, gutter, Space.s2),
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Wrap(
-                spacing: Space.s2,
-                children: [
-                  FilterChip(
-                    key: const Key('alerts_filter_all'),
-                    label: const Text('Tất cả'),
-                    selected: !_unreadOnly,
-                    onSelected: (_) => _setFilter(false),
-                  ),
-                  FilterChip(
-                    key: const Key('alerts_filter_unread'),
-                    label: Text(unreadCount > 0 ? 'Chưa đọc · $unreadCount' : 'Chưa đọc'),
-                    selected: _unreadOnly,
-                    onSelected: _setFilter,
-                  ),
-                ],
+      body: ContentColumn(
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(gutter, 0, gutter, Space.s2),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Wrap(
+                  spacing: Space.s2,
+                  children: [
+                    FilterChip(
+                      key: const Key('alerts_filter_all'),
+                      label: const Text('Tất cả'),
+                      selected: !_unreadOnly,
+                      onSelected: (_) => _setFilter(false),
+                    ),
+                    FilterChip(
+                      key: const Key('alerts_filter_unread'),
+                      label: Text(unreadCount > 0 ? 'Chưa đọc · $unreadCount' : 'Chưa đọc'),
+                      selected: _unreadOnly,
+                      onSelected: _setFilter,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          Expanded(child: _buildList(gutter)),
-        ],
+            Expanded(child: _buildList(gutter)),
+          ],
+        ),
       ),
     );
   }

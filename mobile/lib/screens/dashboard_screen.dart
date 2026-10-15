@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
@@ -19,7 +20,7 @@ import 'goal_form_screen.dart';
 
 /// Màn "Tổng quan" (surfaces/dashboard/brief.md): status hero trước tiên (trạng thái, số được tiêu, thước mức
 /// sàn), rồi "Cần bạn xem", "Dự báo cuối tháng", mục tiêu của tháng và tài khoản.
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.onOpenUncategorized});
 
   /// Chạm hàng "… giao dịch chưa phân loại" → tab Giao dịch đã lọc.
@@ -27,6 +28,33 @@ class DashboardScreen extends StatelessWidget {
 
   static Future<void> openGoalForm(BuildContext context, {GoalView? goal}) async {
     await Navigator.of(context).pushNamed(GoalFormScreen.routeName, arguments: GoalFormArgs(goal: goal));
+  }
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  /// FAB "Thêm mục tiêu" có nhãn ở đầu danh sách và khi cuộn lên; thu về nút tròn 56 dp khi cuộn xuống để không
+  /// nằm đè lên nội dung đang đọc.
+  final _fabExtended = ValueNotifier<bool>(true);
+
+  @override
+  void dispose() {
+    _fabExtended.dispose();
+    super.dispose();
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
+    if (n is UserScrollNotification) {
+      if (n.direction == ScrollDirection.reverse) _fabExtended.value = false;
+      if (n.direction == ScrollDirection.forward) _fabExtended.value = true;
+    } else if (n is ScrollUpdateNotification && n.metrics.pixels <= n.metrics.minScrollExtent) {
+      // Về tới đầu danh sách (kể cả cuộn bằng bàn phím hay chương trình): luôn có nhãn.
+      _fabExtended.value = true;
+    }
+    return false;
   }
 
   @override
@@ -44,22 +72,56 @@ class DashboardScreen extends StatelessWidget {
     } else {
       body = RefreshIndicator(
         onRefresh: state.load,
-        child: _DashboardBody(summary: summary, state: state, onOpenUncategorized: onOpenUncategorized),
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _onScroll,
+          child: _DashboardBody(summary: summary, state: state, onOpenUncategorized: widget.onOpenUncategorized),
+        ),
       );
     }
 
     // Cửa sổ rộng: FAB nằm ở đầu NavigationRail (HomeShell), không hiện thêm ở đây.
     final showFab = !ShellScope.primaryActionInRailOf(context) && !noData;
     return Scaffold(
-      appBar: AppBar(title: const Text('Tổng quan')),
-      body: body,
+      appBar: ContentAppBar(title: const Text('Tổng quan')),
+      // Phím Tab đi hết nội dung rồi mới tới FAB và thanh điều hướng (không xen kẽ theo vị trí trên màn hình).
+      body: FocusTraversalGroup(child: ContentColumn(child: body)),
+      floatingActionButtonLocation: ContentFabLocation.of(context),
       floatingActionButton: showFab
-          ? FloatingActionButton.extended(
-              onPressed: () => openGoalForm(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Thêm mục tiêu'),
+          ? ValueListenableBuilder<bool>(
+              valueListenable: _fabExtended,
+              builder: (context, extended, _) => _AddGoalFab(extended: extended),
             )
           : null,
+    );
+  }
+}
+
+/// FAB "Thêm mục tiêu": có nhãn, hoặc thu gọn thành nút 56 dp chỉ có icon (kèm tooltip, nhãn đọc màn hình giữ
+/// nguyên) khi đang cuộn xuống.
+class _AddGoalFab extends StatelessWidget {
+  const _AddGoalFab({required this.extended});
+
+  final bool extended;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fabTheme = theme.floatingActionButtonTheme;
+    return Theme(
+      data: theme.copyWith(
+        floatingActionButtonTheme: extended
+            ? fabTheme
+            : fabTheme.copyWith(extendedSizeConstraints: const BoxConstraints.tightFor(width: 56, height: 56)),
+      ),
+      child: FloatingActionButton.extended(
+        key: const Key('dashboard_add_goal'),
+        onPressed: () => DashboardScreen.openGoalForm(context),
+        isExtended: extended,
+        tooltip: extended ? null : 'Thêm mục tiêu',
+        extendedPadding: extended ? null : const EdgeInsets.all(Space.s4),
+        icon: const Icon(Icons.add),
+        label: const Text('Thêm mục tiêu'),
+      ),
     );
   }
 }

@@ -177,19 +177,23 @@ void main() {
     expect(find.text('RUT TIEN ATM'), findsOneWidget);
     expect(find.text('−3.500.000đ'), findsOneWidget);
     expect(find.text('−45.000đ'), findsOneWidget);
-    expect(find.text('Chưa phân loại'), findsWidgets);
+    // Bộ lọc có số đếm; mỗi hàng tối đa một pill theo thứ tự ưu tiên (trùng > chờ khớp > chưa phân loại).
+    expect(find.text('Chưa phân loại · 1'), findsOneWidget);
     expect(find.text('Có thể trùng'), findsOneWidget);
     expect(find.text('Đang chờ khớp'), findsOneWidget);
-    expect(find.textContaining('sepay, email'), findsWidgets);
+    // Dòng phụ: TK · giờ Việt Nam (02:59Z = 09:59 ICT) · nguồn viết đúng tên.
+    expect(find.text('VCB chính · 09:59 · SePay, Email'), findsOneWidget);
+    // Khoản chi màu chữ thường (chi tiêu không phải lỗi), không đỏ.
     final amount = tester.widget<Text>(find.text('−3.500.000đ'));
-    expect(amount.style?.color, Colors.red.shade700);
+    final scheme = Theme.of(tester.element(find.text('−3.500.000đ'))).colorScheme;
+    expect(amount.textSpan!.style!.color, scheme.onSurface);
 
     await tester.tap(find.text('RUT TIEN ATM'));
     await tester.pumpAndSettle();
     expect(find.text('Tính cho tháng sau'), findsOneWidget);
     expect(find.text('Loại trừ'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '🏠 Thuê trọ'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Thuê trọ'));
     await tester.pump();
     await tester.tap(find.text('Nhớ luật cho giao dịch tương tự'));
     await tester.pump();
@@ -202,24 +206,36 @@ void main() {
 
     final patch = server.where('PATCH', '/api/transactions/55').single;
     expect(patch.json, {'category_id': 2, 'remember_rule': true, 'rule_pattern': 'rut tien'});
-    expect(find.text('🏠 Thuê trọ'), findsOneWidget);
+    // Danh mục nằm ở dòng phụ (và đĩa đầu hàng), không còn huy hiệu riêng.
+    expect(find.text('Thuê trọ · VCB chính · 09:59 · SePay, Email'), findsOneWidget);
   });
 
   testWidgets('Giao dịch: "Tính cho tháng sau" và "Loại trừ" gửi đúng body', (tester) async {
     final (server, _) = await _pump(tester);
     await _goTab(tester, 'Giao dịch');
 
+    // Mọi lựa chọn trong bảng là một form: bật công tắc rồi lưu bằng nút dính ở đáy.
     await tester.tap(find.text('RUT TIEN ATM'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Tính cho tháng sau'));
     await tester.pumpAndSettle();
+    expect(server.where('PATCH', '/api/transactions/55'), isEmpty);
+    await tester.tap(find.text('Lưu thay đổi'));
+    await tester.pumpAndSettle();
     expect(server.where('PATCH', '/api/transactions/55').last.json, {'for_next_month': true});
+    expect(find.text('Đã tính cho mục tiêu tháng sau'), findsOneWidget);
 
     await tester.tap(find.text('RUT TIEN ATM'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Loại trừ'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Lưu thay đổi'));
+    await tester.pumpAndSettle();
     expect(server.where('PATCH', '/api/transactions/55').last.json, {'excluded': true});
+    // Loại trừ hoàn tác được: "Hoàn tác" gửi lại giá trị cũ.
+    await tester.tap(find.widgetWithText(SnackBarAction, 'Hoàn tác'));
+    await tester.pumpAndSettle();
+    expect(server.where('PATCH', '/api/transactions/55').last.json, {'excluded': false});
   });
 
   testWidgets('Nhớ luật: dùng cụm từ server gợi ý; không có thì ô trống và bắt buộc nhập', (tester) async {
@@ -239,7 +255,7 @@ void main() {
     await tester.tap(find.text('MBVCB.11223344.556677.NGUYEN VAN A chuyen tien'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '🏠 Thuê trọ'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Thuê trọ'));
     await tester.pump();
     await tester.tap(find.text('Nhớ luật cho giao dịch tương tự'));
     await tester.pump();
@@ -283,26 +299,30 @@ void main() {
     // Giao dịch chưa phân loại: chọn rồi bỏ chọn → không còn gì để lưu.
     await tester.tap(find.text('RUT TIEN ATM'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '🏠 Thuê trọ'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Thuê trọ'));
     await tester.pump();
     await tester.tap(find.text('Nhớ luật cho giao dịch tương tự'));
     await tester.pump();
-    await tester.tap(find.widgetWithText(ChoiceChip, '🏠 Thuê trọ'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Thuê trọ'));
     await tester.pump();
-    expect(tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value, isFalse);
+    final remember = find.widgetWithText(SwitchListTile, 'Nhớ luật cho giao dịch tương tự');
+    expect(tester.widget<SwitchListTile>(remember).value, isFalse);
     expect(find.widgetWithText(TextField, 'Cụm từ nhận diện'), findsNothing);
-    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Bỏ phân loại')).onPressed, isNull);
+    // Không còn gì thay đổi: nút lưu (vẫn tên "Lưu danh mục") bị tắt.
+    final save = tester.widget<FilledButton>(find.byKey(const Key('tx_save')));
+    expect(save.onPressed, isNull);
+    expect(find.descendant(of: find.byKey(const Key('tx_save')), matching: find.text('Lưu danh mục')), findsOne);
     await tester.tapAt(const Offset(10, 10)); // đóng bảng
     await tester.pumpAndSettle();
 
     // Giao dịch đã có danh mục: bỏ chọn rồi lưu → chỉ gửi category_id null.
     await tester.tap(find.text('GRABFOOD'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '🏠 Thuê trọ'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Thuê trọ'));
     await tester.pump();
     await tester.tap(find.text('Nhớ luật cho giao dịch tương tự'));
     await tester.pump();
-    await tester.tap(find.widgetWithText(ChoiceChip, '🏠 Thuê trọ'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Thuê trọ'));
     await tester.pump();
     await tester.tap(find.text('Bỏ phân loại'));
     await tester.pumpAndSettle();
@@ -340,7 +360,9 @@ void main() {
       },
     );
     await _goTab(tester, 'Giao dịch');
-    expect(find.text('🎯 Tiền trọ · 11/2026'), findsOneWidget);
+    // Mục tiêu được gán thành dòng phụ có icon cờ (không còn emoji 🎯).
+    expect(find.text('Tiền trọ · 11/2026'), findsOneWidget);
+    expect(find.text('🎯 Tiền trọ · 11/2026'), findsNothing);
 
     // Giao dịch tháng 9: chỉ có mục tiêu tháng 9.
     await tester.tap(find.text('COM TRUA T9'));
@@ -351,6 +373,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Tiền trọ (Quỹ giữ · 10/2026)'), findsNothing);
     await tester.tap(find.text('Tiền ăn T9 (Ngân sách · 09/2026)').last);
+    await tester.pumpAndSettle();
+    expect(server.where('PATCH', '/api/transactions/61'), isEmpty);
+    await tester.tap(find.text('Lưu thay đổi'));
     await tester.pumpAndSettle();
     expect(server.where('PATCH', '/api/transactions/61').single.json, {'goal_id': 201});
 
@@ -470,11 +495,12 @@ void main() {
     );
     await _goTab(tester, 'Cài đặt');
     expect(find.textContaining('không tính vào tổng'), findsOneWidget);
-    await tester.tap(find.text('MB lạ · …7777'));
+    await tester.tap(find.text('MB lạ ··7777'));
     await tester.pumpAndSettle();
 
+    // Bảng trượt (không còn hộp thoại); "Xác nhận TK mới" là công tắc "Đây là tài khoản của tôi".
     bool confirmed() =>
-        tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'Xác nhận TK mới')).value!;
+        tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'Đây là tài khoản của tôi')).value;
     bool included() => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'Tính vào tổng số dư')).value;
     expect(confirmed(), isFalse);
     expect(included(), isFalse);
@@ -485,14 +511,14 @@ void main() {
     expect(confirmed(), isTrue);
 
     // Bỏ xác nhận thì không tính vào tổng được.
-    await tester.tap(find.text('Xác nhận TK mới'));
+    await tester.tap(find.text('Đây là tài khoản của tôi'));
     await tester.pump();
     expect(confirmed(), isFalse);
     expect(included(), isFalse);
 
     await tester.tap(find.text('Tính vào tổng số dư'));
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Lưu'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Lưu tài khoản'));
     await tester.pumpAndSettle();
 
     final body = server.where('PATCH', '/api/accounts/2').single.json as Map<String, dynamic>;
@@ -504,7 +530,8 @@ void main() {
     final (server, _) = await _pump(tester);
     await _goTab(tester, 'Giao dịch');
 
-    await tester.tap(find.widgetWithText(FloatingActionButton, 'Thêm giao dịch'));
+    // FAB của Giao dịch là "Nhập tay" (màu secondaryContainer, men lam dành cho "Thêm mục tiêu").
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'Nhập tay'));
     await tester.pumpAndSettle();
     expect(find.byType(ManualTxScreen), findsOneWidget);
     expect(find.textContaining('Đã phân loại khoản rút ATM thì không nhập lại'), findsOneWidget);
@@ -522,6 +549,7 @@ void main() {
     expect(post['affects_balance'], isFalse);
     expect(post['bank_time'], endsWith('Z'));
     expect(find.byType(ManualTxScreen), findsNothing);
+    expect(find.text('Đã thêm khoản chi 50.000đ'), findsOneWidget);
   });
 
   testWidgets('Cảnh báo: lịch sử và đọc hết', (tester) async {
@@ -529,7 +557,9 @@ void main() {
     await _goTab(tester, 'Cảnh báo');
 
     expect(find.text('Bản tin sáng'), findsOneWidget);
-    expect(find.text('⚠️ Sắp chạm mức mục tiêu'), findsOneWidget);
+    // Emoji đầu tiêu đề (soạn cho Telegram) được bỏ: icon theo mức đã nói điều đó.
+    expect(find.text('Sắp chạm mức mục tiêu'), findsOneWidget);
+    expect(find.text('⚠️ Sắp chạm mức mục tiêu'), findsNothing);
     await tester.tap(find.text('Đọc hết'));
     await tester.pumpAndSettle();
     expect(server.where('POST', '/api/alerts/read-all'), hasLength(1));
@@ -597,13 +627,13 @@ void main() {
     await _goTab(tester, 'Giao dịch');
     await tester.tap(find.text('RUT TIEN ATM'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '🏠 Thuê trọ'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Thuê trọ'));
     await tester.tap(find.text('Nhớ luật cho giao dịch tương tự'));
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(10, 10)); // đóng bảng
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(FloatingActionButton, 'Thêm giao dịch'));
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'Nhập tay'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView).last, const Offset(0, -2000));
     await tester.pumpAndSettle();

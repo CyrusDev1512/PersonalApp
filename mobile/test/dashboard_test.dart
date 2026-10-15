@@ -66,32 +66,45 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('WARNING: banner cam với chữ và lý do, số dư / mức sàn / được tiêu', (tester) async {
+  testWidgets('WARNING: status hero (tiêu đề, số được tiêu, ý nghĩa, chú giải), cần xem, mục tiêu, tài khoản', (
+    tester,
+  ) async {
     final server = _server();
     await _pumpApp(tester, _stateFor(server, now: DateTime.utc(2026, 10, 14, 3)));
 
     expect(find.byType(HomeShell), findsOneWidget);
+    // Hero: tiêu đề trạng thái, số "được tiêu" lớn, dòng ý nghĩa thay cho lý do của máy chủ.
     expect(find.text('Sắp chạm mức mục tiêu'), findsOneWidget);
-    expect(find.text('Chỉ còn 500.000đ trên mức sàn 6.000.000đ'), findsOneWidget);
-    expect(find.text('6.500.000đ'), findsOneWidget);
-    expect(find.text('Mức sàn'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('status_hero_free')), matching: find.text('500.000đ')), findsOne);
+    expect(find.text('dưới vùng đệm 600.000đ · còn 18 ngày'), findsOneWidget);
+    expect(find.text('Chỉ còn 500.000đ trên mức sàn 6.000.000đ'), findsNothing);
+    expect(find.byKey(const Key('floor_ruler')), findsOneWidget);
+    // Chú giải: mức sàn và tổng số dư (không còn số dư là số lớn nhất).
+    expect(find.text('Giữ cho mục tiêu'), findsOneWidget);
     expect(find.text('6.000.000đ'), findsOneWidget);
-    expect(find.text('Được tiêu thoải mái'), findsOneWidget);
-    expect(find.text('500.000đ'), findsOneWidget);
-    expect(find.textContaining('cập nhật lúc'), findsOneWidget);
-    expect(find.textContaining('đã hơn 48 giờ'), findsNothing);
-    expect(find.text('ước tính'), findsNothing);
+    expect(find.text('Số dư'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('total_balance')), matching: find.text('6.500.000đ')), findsOne);
+    // Giờ cập nhật theo giờ Việt Nam (02:59Z = 09:59 ICT).
+    expect(find.text('Cập nhật lúc 09:59'), findsOneWidget);
+    expect(find.textContaining('Số dư chưa cập nhật'), findsNothing);
+    expect(find.text('Số dư · ước tính'), findsNothing);
 
-    // Thẻ mục tiêu.
-    expect(find.text('Tiền trọ'), findsOneWidget);
-    expect(find.text('Quỹ giữ'), findsOneWidget);
-    expect(find.text('Ngân sách'), findsOneWidget);
-    expect(find.text('Đã chi 2.000.000đ / 5.000.000đ'), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
-
-    // Chip chưa phân loại + cảnh báo gần nhất.
+    // Cần bạn xem: hàng chưa phân loại.
+    expect(find.text('Cần bạn xem'), findsOneWidget);
     expect(find.text('1 giao dịch chưa phân loại'), findsOneWidget);
-    expect(find.text('⚠️ Sắp chạm mức mục tiêu'), findsOneWidget);
+
+    // Mục tiêu: hàng trong một nhóm, thanh 6 dp, chú thích tiến độ.
+    expect(find.text('Mục tiêu tháng 10'), findsOneWidget);
+    expect(find.text('Tiền trọ'), findsOneWidget);
+    expect(find.textContaining('Quỹ giữ · 🏠 Thuê trọ'), findsOneWidget);
+    expect(find.textContaining('Ngân sách · 🍜 Ăn uống'), findsOneWidget);
+    expect(find.text('Đã chi 2.000.000đ / 5.000.000đ · 40%'), findsOneWidget);
+    expect(find.byKey(const ValueKey('goal_progress_1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('goal_progress_2')), findsOneWidget);
+
+    // Tài khoản (gọn, cùng hàng với Cài đặt). Không còn "Cảnh báo gần đây".
+    expect(find.text('VCB chính ··6789'), findsOneWidget);
+    expect(find.text('⚠️ Sắp chạm mức mục tiêu'), findsNothing);
 
     // Gọi API đúng header.
     expect(server.where('GET', '/api/summary').first.headers['Authorization'], 'Bearer tok');
@@ -106,8 +119,9 @@ void main() {
     );
     await _pumpApp(tester, _stateFor(server, now: DateTime.utc(2026, 10, 17, 3)));
 
-    expect(find.textContaining('đã hơn 48 giờ'), findsOneWidget);
-    expect(find.text('ước tính'), findsOneWidget);
+    expect(find.text('Số dư chưa cập nhật 3 ngày'), findsOneWidget);
+    expect(find.text('Số dư · ước tính'), findsOneWidget);
+    expect(find.text('Vietcombank · cập nhật 09:59 14/10 · ước tính'), findsOneWidget);
   });
 
   testWidgets('FAB "Thêm mục tiêu" mở form và tạo mục tiêu', (tester) async {
@@ -121,10 +135,12 @@ void main() {
 
     expect(find.byType(GoalFormScreen), findsOneWidget);
     expect(find.text('Tên mục tiêu'), findsOneWidget);
+    // Loại mục tiêu trước, nhãn ngắn; tháng là "Tháng 10" / "Tháng 11".
+    expect(find.text('Loại mục tiêu'), findsOneWidget);
     expect(find.text('Quỹ giữ'), findsOneWidget);
-    expect(find.text('Ngân sách chi tiêu'), findsOneWidget);
-    expect(find.text('Tháng này (10/2026)'), findsOneWidget);
-    expect(find.text('Tháng sau (11/2026)'), findsOneWidget);
+    expect(find.text('Ngân sách'), findsOneWidget);
+    expect(find.text('Tháng 10'), findsOneWidget);
+    expect(find.text('Tháng 11'), findsOneWidget);
 
     // Lưu khi trống -> thông báo lỗi.
     await tester.tap(find.byKey(const Key('goal_save')));
@@ -162,7 +178,7 @@ void main() {
     await tester.tap(find.widgetWithText(FloatingActionButton, 'Thêm mục tiêu'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Ngân sách chi tiêu'));
+    await tester.tap(find.text('Ngân sách'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('goal_name')), 'Tiền ăn');
     await tester.enterText(find.byKey(const Key('goal_amount')), '5000000');
@@ -198,7 +214,8 @@ void main() {
     await _pumpApp(tester, _stateFor(server));
 
     expect(find.text('Chưa biết số dư'), findsWidgets);
-    expect(find.text('Chưa có mục tiêu'), findsOneWidget);
+    expect(find.text('Nhập số dư hiện tại của VCB chính ··6789 để app tính được phần được tiêu.'), findsOneWidget);
+    expect(find.text('Chưa có mục tiêu tháng 10'), findsOneWidget);
     final button = find.widgetWithText(FilledButton, 'Nhập số dư');
     expect(button, findsOneWidget);
 
@@ -224,7 +241,8 @@ void main() {
         return warningSummaryJson();
       },
     });
-    final state = _stateFor(server, now: DateTime(2026, 10, 14, 9, 59));
+    // 02:59 UTC = 09:59 giờ Việt Nam: giờ hiện theo ICT, không theo múi giờ của máy.
+    final state = _stateFor(server, now: DateTime.utc(2026, 10, 14, 2, 59));
     await _pumpApp(tester, state);
     expect(find.byKey(const Key('offline_banner')), findsNothing);
 
@@ -232,9 +250,11 @@ void main() {
     await state.load();
     await tester.pumpAndSettle();
 
+    // Dải trung tính (không đỏ) + dòng offline trong hero.
     expect(find.byKey(const Key('offline_banner')), findsOneWidget);
-    expect(find.textContaining('Đang offline'), findsOneWidget);
-    expect(find.textContaining('09:59 14/10'), findsOneWidget);
+    expect(find.text('Đang offline, không kết nối được máy chủ'), findsOneWidget);
+    expect(find.text('Đang hiện số liệu tải lúc 09:59 14/10.'), findsOneWidget);
+    expect(find.text('Đang offline · số liệu lúc 09:59'), findsOneWidget);
     // Dữ liệu cũ vẫn hiện.
     expect(find.text('Sắp chạm mức mục tiêu'), findsOneWidget);
   });
@@ -313,7 +333,7 @@ void main() {
     await _pumpApp(tester, _stateFor(server));
 
     expect(server.where('GET', '/api/goals').last.url.queryParameters['month'], '2026-11');
-    expect(find.textContaining('Mục tiêu tháng sau'), findsNothing);
+    expect(find.textContaining('mục tiêu đã tạo trước'), findsNothing);
 
     await tester.tap(find.widgetWithText(FloatingActionButton, 'Thêm mục tiêu'));
     await tester.pumpAndSettle();
@@ -324,7 +344,7 @@ void main() {
     await tester.tap(find.text('🏠 Thuê trọ').last);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('goal_series_hint')), findsNothing);
-    await tester.tap(find.text('Tháng sau (11/2026)'));
+    await tester.tap(find.text('Tháng 11'));
     await tester.pumpAndSettle();
     // Tháng này đã có "Tiền trọ" lặp lại cùng danh mục → báo sẽ cập nhật chuỗi đó.
     expect(find.byKey(const Key('goal_series_hint')), findsOneWidget);
@@ -332,11 +352,14 @@ void main() {
     await tester.tap(find.byKey(const Key('goal_save')));
     await tester.pumpAndSettle();
     expect((server.where('POST', '/api/goals').single.json as Map)['month'], '2026-11');
-    expect(find.text('Đã tạo mục tiêu cho tháng 11/2026'), findsOneWidget);
+    expect(find.text('Đã tạo mục tiêu cho tháng 11'), findsOneWidget);
 
+    // Một hàng thu gọn "Tháng 11 · 1 mục tiêu đã tạo trước"; chạm để mở danh sách.
     final section = find.byKey(const Key('next_month_goals'));
     await tester.ensureVisible(section);
-    expect(find.text('Mục tiêu tháng sau (11/2026)'), findsOneWidget);
+    expect(find.descendant(of: section, matching: find.text('3.500.000đ')), findsNothing);
+    await tester.tap(find.text('Tháng 11 · 1 mục tiêu đã tạo trước'));
+    await tester.pumpAndSettle();
     expect(find.descendant(of: section, matching: find.text('3.500.000đ')), findsOneWidget);
 
     await tester.tap(find.descendant(of: section, matching: find.text('Tiền trọ')));
@@ -364,7 +387,8 @@ void main() {
         ConnectionStore.keyToken: 'tok',
         ConnectionStore.keySummaryCache: jsonEncode({
           'base_url': 'https://finance.example.com',
-          'loaded_at': DateTime(2026, 10, 14, 8, 30).toUtc().toIso8601String(),
+          // 01:30 UTC = 08:30 giờ Việt Nam.
+          'loaded_at': DateTime.utc(2026, 10, 14, 1, 30).toIso8601String(),
           'summary': warningSummaryJson(),
         }),
       });
@@ -381,7 +405,7 @@ void main() {
       expect(server.where('GET', '/api/summary'), isNotEmpty);
       expect(find.text('Sắp chạm mức mục tiêu'), findsOneWidget);
       expect(find.byKey(const Key('offline_banner')), findsOneWidget);
-      expect(find.textContaining('08:30 14/10'), findsOneWidget);
+      expect(find.text('Đang hiện số liệu tải lúc 08:30 14/10.'), findsOneWidget);
     });
 
     testWidgets('tải thành công thì lưu bản tổng quan cho lần offline sau', (tester) async {

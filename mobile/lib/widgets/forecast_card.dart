@@ -9,13 +9,13 @@ import 'first_line_icon.dart';
 import 'list_group.dart';
 import 'money_text.dart';
 
-/// Màu tiêu đề dự báo: `danger.foreground` (chạm mức sàn trong ≤ 7 ngày), `warning.foreground` (chạm trong
-/// tháng), còn lại `null` (màu chữ thường `onSurface`).
+/// Màu tiêu đề dự báo: `warning.foreground` khi sẽ chạm mức sàn (trong tháng hoặc trong ≤ 7 ngày), còn lại
+/// `null` (màu chữ thường `onSurface`). Không bao giờ đỏ: dự báo là lời nhắc, chưa phải tiền mục tiêu đang bị
+/// dùng (The Red Is Earned Rule); "≤ 7 ngày" được báo bằng icon `trending_down`, đỏ chỉ có ở hero DANGER.
 Color? forecastColor(BuildContext context, ForecastSeverity severity) {
   final status = StatusColors.of(context);
   return switch (severity) {
-    ForecastSeverity.danger => status.danger.foreground,
-    ForecastSeverity.warning => status.warning.foreground,
+    ForecastSeverity.danger || ForecastSeverity.warning => status.warning.foreground,
     ForecastSeverity.neutral => null,
   };
 }

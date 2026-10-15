@@ -264,12 +264,21 @@ class DemoBackend extends http.BaseClient {
 
   // ------------------------------------------------------------------ kiểm tra đầu vào
 
-  static Never _invalid(String field, String msg, {String loc = 'body', Object? input}) => throw _HttpError(422, [
+  /// Lỗi 422 đúng dạng pydantic (`type`, `loc`, `msg`, `input`, `ctx`) như backend thật.
+  static Never _invalid(
+    String field,
+    String msg, {
+    String loc = 'body',
+    Object? input,
+    String type = 'value_error',
+    Map<String, Object?>? ctx,
+  }) => throw _HttpError(422, [
     {
-      'type': 'value_error',
+      'type': type,
       'loc': [loc, field],
       'msg': msg,
       'input': input,
+      'ctx': ?ctx,
     },
   ]);
 
@@ -296,20 +305,36 @@ class DemoBackend extends http.BaseClient {
   static String? _str(_Json b, String key, {int? min, int? max, bool required = false}) {
     final v = b[key];
     if (v == null) {
-      if (required) _invalid(key, 'Field required');
+      if (required) _invalid(key, 'Field required', type: 'missing');
       return null;
     }
     if (v is! String) _invalid(key, 'Input should be a valid string', input: v);
     final len = v.runes.length;
-    if (min != null && len < min) _invalid(key, 'String should have at least $min character', input: v);
-    if (max != null && len > max) _invalid(key, 'String should have at most $max characters', input: v);
+    if (min != null && len < min) {
+      _invalid(
+        key,
+        'String should have at least $min character',
+        input: v,
+        type: 'string_too_short',
+        ctx: {'min_length': min},
+      );
+    }
+    if (max != null && len > max) {
+      _invalid(
+        key,
+        'String should have at most $max characters',
+        input: v,
+        type: 'string_too_long',
+        ctx: {'max_length': max},
+      );
+    }
     return v;
   }
 
   static int? _int(_Json b, String key, {int? gt, int? ge, int? le, bool required = false}) {
     final v = b[key];
     if (v == null) {
-      if (required) _invalid(key, 'Field required');
+      if (required) _invalid(key, 'Field required', type: 'missing');
       return null;
     }
     final int n;
@@ -320,9 +345,21 @@ class DemoBackend extends http.BaseClient {
     } else {
       _invalid(key, 'Input should be a valid integer', input: v);
     }
-    if (gt != null && n <= gt) _invalid(key, 'Input should be greater than $gt', input: v);
-    if (ge != null && n < ge) _invalid(key, 'Input should be greater than or equal to $ge', input: v);
-    if (le != null && n > le) _invalid(key, 'Input should be less than or equal to $le', input: v);
+    if (gt != null && n <= gt) {
+      _invalid(key, 'Input should be greater than $gt', input: v, type: 'greater_than', ctx: {'gt': gt});
+    }
+    if (ge != null && n < ge) {
+      _invalid(
+        key,
+        'Input should be greater than or equal to $ge',
+        input: v,
+        type: 'greater_than_equal',
+        ctx: {'ge': ge},
+      );
+    }
+    if (le != null && n > le) {
+      _invalid(key, 'Input should be less than or equal to $le', input: v, type: 'less_than_equal', ctx: {'le': le});
+    }
     return n;
   }
 

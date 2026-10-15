@@ -130,6 +130,26 @@ abstract final class MoneySpans {
 
   static bool _isDigit(String c) => c.codeUnitAt(0) >= 0x30 && c.codeUnitAt(0) <= 0x39;
 
+  /// Dấu "−" (U+2212) của Be Vietnam Pro có lề phải rộng (advance 661, xMax 545 / 1000) cộng lề trái của chữ số:
+  /// khoảng hở ≈ 0,18 em trông như dấu bị tách khỏi số. Kéo chữ số lại gần 0,1 em.
+  static const double minusTightenEm = 0.1;
+
+  /// Phần đầu (dấu ước tính "~", dấu "−"/"+") thành các span; dấu "−" có letterSpacing âm ([minusTightenEm]).
+  /// [fontSizePx]: cỡ chữ thật trên màn hình (đã phóng), [tracking]: letterSpacing đang dùng.
+  static List<InlineSpan> leadingSpans(String leading, {required double fontSizePx, double tracking = 0}) {
+    if (leading.isEmpty) return const [];
+    final i = leading.indexOf(minusSign);
+    if (i < 0) return [TextSpan(text: leading)];
+    return [
+      if (i > 0) TextSpan(text: leading.substring(0, i)),
+      TextSpan(
+        text: minusSign,
+        style: TextStyle(letterSpacing: tracking - minusTightenEm * fontSizePx),
+      ),
+      if (i + 1 < leading.length) TextSpan(text: leading.substring(i + 1)),
+    ];
+  }
+
   /// Chuỗi chữ của [parts]. [cellEm]: bề rộng ô (em) theo độ đậm; `null` = chữ số tỉ lệ.
   static MoneySpanLayout build({
     required MoneyParts parts,
@@ -145,7 +165,12 @@ abstract final class MoneySpans {
         TextSpan(
           style: numeral,
           children: [
-            TextSpan(text: body),
+            ...leadingSpans(
+              parts.leading,
+              fontSizePx: scaler.scale(numeral.fontSize ?? 14),
+              tracking: numeral.letterSpacing ?? 0,
+            ),
+            TextSpan(text: parts.digits),
             unitSpan,
           ],
         ),
@@ -169,7 +194,11 @@ abstract final class MoneySpans {
     final children = <InlineSpan>[];
     for (var i = 0; i < chars.length; i++) {
       final c = chars[i];
-      final trail = _isDigit(c) ? (cell - adv(c)) / 2 : tracking;
+      final trail = _isDigit(c)
+          ? (cell - adv(c)) / 2
+          : c == minusSign
+          ? tracking - minusTightenEm * scaledSize
+          : tracking;
       children.add(
         TextSpan(
           text: c,
@@ -313,9 +342,14 @@ class MoneyText extends StatelessWidget {
     final spec = MoneyStyles.of(context).spec(style);
     final c = color ?? moneyToneColor(context, tone);
     return TextSpan(
-      text: '${parts.leading}${parts.digits}',
       style: spec.numeral.copyWith(color: c),
       children: [
+        ...MoneySpans.leadingSpans(
+          parts.leading,
+          fontSizePx: MediaQuery.textScalerOf(context).scale(spec.numeral.fontSize ?? 14),
+          tracking: spec.numeral.letterSpacing ?? 0,
+        ),
+        TextSpan(text: parts.digits),
         TextSpan(
           text: vndUnit,
           style: spec.unit.copyWith(color: c),

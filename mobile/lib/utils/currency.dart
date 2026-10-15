@@ -90,3 +90,10 @@ class VndInputFormatter extends TextInputFormatter {
     );
   }
 }
+
+/// Số tiền lớn nhất máy chủ nhận cho mục tiêu, giao dịch nhập tay và lương dự kiến (backend: `le=100_000_000_000`).
+const int maxVndAmount = 100000000000;
+
+/// Lỗi "quá lớn" cho ô tiền, hoặc `null` khi [amount] ≤ [max].
+String? vndTooLarge(int? amount, {int max = maxVndAmount}) =>
+    amount != null && amount > max ? 'Số tiền tối đa ${formatGrouped(max)}đ' : null;

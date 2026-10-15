@@ -159,7 +159,7 @@ void main() {
   });
 
   group('ForecastCard', () {
-    testWidgets('chạm mức sàn trong ≤ 7 ngày: tiêu đề đỏ', (tester) async {
+    testWidgets('chạm mức sàn trong ≤ 7 ngày: tiêu đề hổ phách + icon xu hướng giảm (không đỏ)', (tester) async {
       await _pumpCard(
         tester,
         Forecast.fromJson(
@@ -172,8 +172,10 @@ void main() {
       );
       expect(find.byKey(const Key('forecast_card')), findsOneWidget);
       expect(find.text('Chi như hiện tại thì khoảng ngày 19/10 sẽ chạm mức sàn'), findsOneWidget);
-      // Màu trạng thái của theme (gạch đỏ dịu), không phải Colors.red.
-      expect(_headlineColor(tester), StatusColors.light.danger.foreground);
+      // The Red Is Earned Rule: dự báo chưa phải tiền mục tiêu đang bị dùng, nên không đỏ (đỏ chỉ ở hero DANGER).
+      // "Trong 7 ngày" được nói bằng icon trending_down.
+      expect(_headlineColor(tester), StatusColors.light.warning.foreground);
+      expect(find.byIcon(Icons.trending_down), findsOneWidget);
     });
 
     testWidgets('chạm mức sàn trong tháng: tiêu đề hổ phách + đúng các dòng chi tiết của server, không lặp', (

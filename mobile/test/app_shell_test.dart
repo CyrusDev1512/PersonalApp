@@ -72,34 +72,107 @@ void main() {
     expect(style.fontWeight, FontWeight.w600);
   });
 
-  testWidgets('máy tính 1280×800: NavigationRail + FAB ở đầu rail, cột nội dung tối đa 720 dp ở giữa', (tester) async {
+  testWidgets('máy tính 1280×800: NavigationRail + FAB ở đầu rail (chỉ ở Tổng quan), thân màn tối đa 720 dp ở giữa', (
+    tester,
+  ) async {
     await _pump(tester, const Size(1280, 800));
     expect(find.byType(NavigationBar), findsNothing);
     expect(find.byType(NavigationRail), findsOneWidget);
     // Một FAB duy nhất (ở rail), Tổng quan không hiện thêm.
     expect(_addGoalFab, findsOneWidget);
     expect(find.descendant(of: find.byType(NavigationRail), matching: _addGoalFab), findsOneWidget);
-    expect(
-      tester
-          .widget<Scaffold>(find.descendant(of: find.byType(DashboardScreen), matching: find.byType(Scaffold)))
-          .floatingActionButton,
-      isNull,
-    );
+    final dashboardScaffold = find.descendant(of: find.byType(DashboardScreen), matching: find.byType(Scaffold));
+    expect(tester.widget<Scaffold>(dashboardScaffold).floatingActionButton, isNull);
     final rail = tester.getRect(find.byType(NavigationRail));
-    final page = tester.getRect(find.descendant(of: find.byType(DashboardScreen), matching: find.byType(Scaffold)));
-    expect(page.width, AppLayout.contentMaxWidth);
-    expect(page.center.dx, moreOrLessEquals((rail.right + 1280) / 2, epsilon: 0.5));
+    // App bar rộng hết phần bên phải rail (màu khi cuộn dưới thanh phủ hết bề ngang, không thành một "tấm" giữa
+    // màn); thân màn là cột 720 dp ở giữa; tiêu đề thẳng mép trái của nội dung (mép cột + lề 32).
+    final appBar = tester.getRect(find.descendant(of: find.byType(DashboardScreen), matching: find.byType(AppBar)));
+    expect(appBar.left, rail.right);
+    expect(appBar.right, 1280);
+    final column = tester.getRect(
+      find.descendant(of: find.byType(DashboardScreen), matching: find.byType(RefreshIndicator)).first,
+    );
+    expect(column.width, AppLayout.contentMaxWidth);
+    expect(column.center.dx, moreOrLessEquals((rail.right + 1280) / 2, epsilon: 0.5));
+    final title = tester.getRect(find.descendant(of: find.byType(AppBar), matching: find.text('Tổng quan')));
+    expect(title.left, moreOrLessEquals(column.left + Gutter.expanded, epsilon: 0.5));
 
-    // Đổi tab bằng rail.
+    // Đổi tab bằng rail. Ở tab khác, FAB "Thêm mục tiêu" của rail ẩn (giữ chỗ): Giao dịch chỉ có "Nhập tay".
     await tester.tap(find.descendant(of: find.byType(NavigationRail), matching: find.text('Giao dịch')));
     await tester.pumpAndSettle();
     expect(tester.widget<NavigationRail>(find.byType(NavigationRail)).selectedIndex, 1);
+    expect(find.byKey(const Key('rail_add_goal')).hitTestable(), findsNothing);
+    expect(find.byType(FloatingActionButton).hitTestable(), findsOneWidget);
+    expect(find.widgetWithText(FloatingActionButton, 'Nhập tay').hitTestable(), findsOneWidget);
+    // FAB của tab nằm trong cột nội dung (mép phải cột − 16), không trôi ra mép cửa sổ.
+    final txColumn = (rail.right + 1280) / 2 + AppLayout.contentMaxWidth / 2;
+    final txFab = tester.getRect(find.widgetWithText(FloatingActionButton, 'Nhập tay'));
+    expect(txFab.right, moreOrLessEquals(txColumn - 16, epsilon: 0.5));
 
-    // FAB ở rail mở form mục tiêu, form cũng nằm trong cột 720 dp.
+    // Về Tổng quan: FAB ở rail mở form mục tiêu, form cũng nằm trong cột 720 dp.
+    await tester.tap(find.descendant(of: find.byType(NavigationRail), matching: find.text('Tổng quan')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('rail_add_goal')));
     await tester.pumpAndSettle();
     expect(find.byType(GoalFormScreen), findsOneWidget);
     expect(tester.getRect(find.byType(GoalFormScreen)).width, AppLayout.contentMaxWidth);
+  });
+
+  testWidgets('điện thoại xoay ngang (844×390): giữ NavigationBar, không dùng rail (rail không cuộn được)', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(tester, const Size(844, 390));
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    final settings = tester.getRect(find.descendant(of: find.byType(NavigationBar), matching: find.text('Cài đặt')));
+    expect(settings.bottom, lessThanOrEqualTo(390));
+  });
+
+  testWidgets('Back của hệ thống ở tab khác Tổng quan: về Tổng quan trước, chưa thoát app', (tester) async {
+    await _pump(tester, const Size(390, 844));
+    await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Cài đặt')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex, 3);
+
+    final handled = await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(handled, isTrue, reason: 'Back được app xử lý (không thoát)');
+    expect(tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex, 0);
+
+    // Ở Tổng quan, Back để hệ thống xử lý như thường (thoát app).
+    final atStart = await tester.binding.handlePopRoute();
+    expect(atStart, isFalse);
+  });
+
+  testWidgets('Tổng quan trên điện thoại: FAB thu gọn khi cuộn xuống (vẫn đọc "Thêm mục tiêu"), mở lại khi cuộn lên', (
+    tester,
+  ) async {
+    await _pump(tester, const Size(390, 640));
+    final fab = find.byKey(const Key('dashboard_add_goal'));
+    expect(tester.widget<FloatingActionButton>(fab).isExtended, isTrue);
+    final list = find.descendant(of: find.byType(DashboardScreen), matching: find.byType(Scrollable)).first;
+    await tester.drag(list, const Offset(0, -200));
+    await tester.pumpAndSettle();
+    expect(tester.widget<FloatingActionButton>(fab).isExtended, isFalse);
+    expect(tester.getSize(fab), const Size(56, 56));
+    expect(tester.widget<FloatingActionButton>(fab).tooltip, 'Thêm mục tiêu');
+    await tester.drag(list, const Offset(0, 80));
+    await tester.pumpAndSettle();
+    expect(tester.widget<FloatingActionButton>(fab).isExtended, isTrue);
+  });
+
+  testWidgets('huy hiệu Cảnh báo đọc "N cảnh báo chưa đọc" (không đọc con số trơn trước tên tab)', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, const Size(390, 844));
+    final tab = tester.getSemantics(find.descendant(of: find.byType(NavigationBar), matching: find.text('Cảnh báo')));
+    final data = tab.getSemanticsData();
+    final spoken = '${data.label} ${data.value}';
+    expect(spoken, contains('2 cảnh báo chưa đọc'));
+    expect(data.label.trimLeft().startsWith('2'), isFalse);
+    handle.dispose();
   });
 
   testWidgets('1280×800: bảng trượt (cả bảng giao dịch) không kéo giãn quá 640 dp', (tester) async {
