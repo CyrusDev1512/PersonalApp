@@ -586,7 +586,7 @@ class TxTile extends StatelessWidget {
 
   Widget _leading() {
     if (tx.isInternalTransfer) return const LeadingDisc(icon: Icons.swap_horiz);
-    final visual = CategoryVisual.resolve(systemKey: category?.systemKey, emoji: category?.icon ?? tx.categoryIcon);
+    final visual = category != null ? CategoryVisual.of(category!) : CategoryVisual.fromEmoji(tx.categoryIcon);
     if (tx.categoryId != null && !visual.isEmpty) return CategoryAvatar(visual: visual);
     return LeadingDisc(icon: tx.isOut ? Icons.north_east : Icons.south_west);
   }

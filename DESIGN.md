@@ -508,6 +508,9 @@ hand-picking a `TextTheme` role.
   Reserved Font Name) would replace the cells everywhere, text fields included. Not part of the first build.
 - **Format:** full digits, "." thousands separator, unit "đ" attached with no space (`4.000.000đ`); negatives and
   outgoing amounts use "−" (U+2212), incoming "+". The unit is set smaller (see table) and shares the numeral baseline.
+  The font's "−" has a wide right side bearing (advance 661, xMax 545 per 1000 units) and the digits a 60-unit left
+  bearing, about 0.18 em of air that reads as a detached sign in every money style, cells or not; `MoneySpans` closes
+  it with a −0.1 em `letterSpacing` on the minus.
 - **Signed colours:** outgoing `onSurface`; incoming `StatusColors.ok.foreground`; internal transfers between the
   owner's own accounts (*chuyển nội bộ*) `onSurfaceVariant` with their sign, because they are neither income nor
   spending; excluded (*đã loại trừ*) `onSurfaceVariant` with a strikethrough; pending (*đang chờ khớp*)
@@ -551,12 +554,17 @@ bottom half (FAB, sticky sheet buttons); detail follows in the scroll.
   to its content, 12 dp between sibling groups, 8 dp inline. More space above a heading than below it, always.
 - **Rows:** 56 dp one-line, 72 dp two-line minimum (the standard money row has a meta line, so 72); 16 dp horizontal
   padding; 40 dp leading avatar or icon disc.
-- **Large text:** when `MediaQuery.textScalerOf(context).scale(16) > 20` (font scale above 125%), every row with a
-  trailing amount (transactions, goals, accounts) switches to the stacked layout: title and meta take the full width
-  and the amount moves to its own line under the meta, end-aligned so amounts still form a column. Measured at 360 dp,
-  the title column beside a trailing amount is 224 dp; "−1.250.000đ" in `moneyList` takes 113 dp at 100%, 147 dp at
-  130% and 226 dp at 200%, so beside-the-title only works up to about 125%. Build these rows as one `MoneyRow` widget,
-  not `ListTile.trailing` (which squeezes the title to zero width).
+- **Money rows:** only the title shares its line with the trailing amount; the meta line (and pill, progress bar)
+  runs the full text width under both. The text width inside a row is the window minus 2 × gutter, 2 × 16 dp row
+  padding, the 40 dp disc and its 16 dp gap: 240 dp at 360, 270 dp at 390. "−1.250.000đ" in `moneyList` takes about
+  113 dp at 100% (147 dp at 130%, 226 dp at 200%), so beside a 7-digit amount the title gets only about 111 dp at
+  360 and 141 dp at 390 (the 224 dp in an earlier draft of this section was wrong). Titles may take 3 lines.
+- **Large text and narrow rows:** a row switches to the stacked layout (title and meta full width, the amount on its
+  own line under the meta, end-aligned so amounts still form a column) when the font scale is above 125%
+  (`MediaQuery.textScalerOf(context).scale(16) > 20`), or when the room beside the amount is under 128 dp and the
+  title would need more lines there than at full width (long bank descriptions at 360 dp; short goal and account
+  titles stay beside their amount). Build these rows as one `MoneyRow` widget, not `ListTile.trailing` (which
+  squeezes the title to zero width).
 - **FAB clearance:** scrollables reserve 96 dp at the bottom so the last row is never under the FAB.
 - **Touch:** every target ≥ 48 × 48 dp with ≥ 8 dp between targets (`materialTapTargetSize: padded`).
 - **Edge-to-edge:** draw behind system bars; apply status-bar, navigation-bar, cutout and IME insets
@@ -660,8 +668,11 @@ avatars.
 ### FAB "Thêm mục tiêu"
 - `FloatingActionButton.extended`, icon `Icons.add`, label "Thêm mục tiêu"; `primary` / `onPrimary` (not
   `primaryContainer`: it is the product's primary action), radius `lg` 16 dp, 56 dp tall, level 3 shadow.
-- Only on Tổng quan; always extended (the label is the affordance). On expanded layouts it moves into the
-  `NavigationRail` leading slot. Never disabled (a disabled FAB looks enabled in Flutter): when Tổng quan has no data at
+- Only on Tổng quan. Extended (the label is the affordance) at the top of the list and whenever the owner scrolls
+  up; while scrolling down it collapses to a 56 dp icon FAB (tooltip and screen-reader label "Thêm mục tiêu") so it
+  does not sit over the rows being read. On expanded layouts it moves into the `NavigationRail` leading slot and is
+  shown only while Tổng quan is selected; other tabs keep its space empty (the rail does not jump) so Giao dịch never
+  shows two FABs. Never disabled (a disabled FAB looks enabled in Flutter): when Tổng quan has no data at
   all (load error with no cache) the FAB is hidden and "Thử lại" is the screen's action; otherwise it stays enabled and
   the goal form's save-failure snackbar explains an offline save.
 - Giao dịch has its own FAB, "Nhập tay" (`Icons.edit_note`): it is that screen's one creation action (categorising is
@@ -672,8 +683,12 @@ avatars.
 - **Filter chips** (Giao dịch "Chưa phân loại · 3", Cảnh báo "Chưa đọc"): 32 dp, radius `sm`, 1 dp `outline` stroke
   unselected (M3's default `outlineVariant` is 1.5:1 on `surface`, too faint to read as a control); selected
   `secondaryContainer` with a check icon, no stroke.
-- **Choice chips** (category picker in the categorise sheet): label "<emoji> <tên danh mục>", same styling, wrap with 8 dp
-  gaps, in the categories' `sort_order`.
+- **Choice chips** (category picker in the categorise sheet): the server's default categories (`system_key`) show a
+  Material icon avatar + the plain name ("Ăn uống"); categories the owner created keep their emoji in the label
+  ("🎮 Giải trí"), as user data. The same rule applies everywhere a category is named: transaction rows and discs,
+  goal meta lines (goals carry only the emoji, mapped back to the default category through the seed emoji), the
+  category dropdowns. Selected: the check replaces the avatar (never drawn on top of it). 8 dp gaps between chips;
+  rows are separated by the chips' 48 dp tap targets, no extra run spacing. In the categories' `sort_order`.
 - **Status pill** (not a chip; non-interactive): 28 dp, radius `sm`, `StatusColors.<level>.container` with
   `onContainer` text in `labelMedium` and a 16 dp level icon; used in alert rows and transaction rows, at most one per row.
 
@@ -682,9 +697,10 @@ avatars.
   separated by 1 dp `outlineVariant` dividers inset 72 dp (decorative: rows are told apart by spacing and text). This is
   the only container used for lists; it never holds another filled container.
 - **Row anatomy:** 40 dp leading disc (`surfaceContainerHighest` with an `onSurfaceVariant` icon, or a status container
-  disc for alerts), `titleMedium` primary text, `bodySmall` `onSurfaceVariant` meta line, trailing `moneyList` amount
-  right-aligned; at most one status pill, under the meta. Rows with an amount are `MoneyRow`s and follow the large-text
-  rule in Layout. Plain rows (settings, alerts) may be `ListTile`s.
+  disc for alerts), `titleMedium` primary text (up to 3 lines), `bodySmall` `onSurfaceVariant` meta line, trailing
+  `moneyList` amount right-aligned on the title's line; the meta runs the full text width under title and amount; at
+  most one status pill, under the meta. Rows with an amount are `MoneyRow`s and follow the money-row rules in Layout.
+  Plain rows (settings, alerts) may be `ListTile`s; a multi-line `ListTile` aligns its leading icon to the top.
 - **Account row** (one component, used on Tổng quan and in Cài đặt): leading disc with the bank short name in text
   ("VCB", "MB") or `payments_outlined` for cash; title "Vietcombank ··1234"; meta "cập nhật 14:32" (+ "ước tính",
   "không tính vào tổng"); trailing `moneyList` balance or "chưa biết số dư" in `bodyMedium` `onSurfaceVariant`; the
@@ -697,7 +713,11 @@ avatars.
 
 ### Inputs / Fields
 - **Style:** `OutlineInputBorder`, radius `md` 12 dp, 1 dp `outline`, 56 dp tall, persistent floating label,
-  `bodyLarge` text; helper text `bodySmall` `onSurfaceVariant`, up to 3 lines.
+  `bodyLarge` text; helper text `bodySmall` `onSurfaceVariant`, written to fit 3 lines at 100% but never truncated
+  (`helperMaxLines` / `errorMaxLines` 8, for 200%). Floating labels stay short ("Phần trăm mức sàn", "Đã chi trước khi
+  dùng app"); the explanation goes in the helper. Supporting text under a non-field control (the type segmented
+  button) is indented 16 dp like field helpers. Non-money numbers (percent, day of month) use `titleMedium` in the
+  64 dp field height of the money field beside them, not `moneyInput`.
 - **Focus:** 2 dp `primary` border, label in `primary`. **Error:** 2 dp `error` border, message in `error` below
   ("Nhập số tiền", "Số tiền phải lớn hơn 0"). **Disabled:** 38% `onSurface`.
 - **Money fields:** 64 dp tall, `moneyInput` text (proportional digits), suffix "đ", `TextInputType.number`, live grouping with
@@ -721,11 +741,20 @@ avatars.
   dịch (`receipt_long`), Cảnh báo (`notifications`), Cài đặt (`settings`). Flutter clamps these labels at 130%; "Tổng
   quan" then measures 86 dp in a 90 dp slot (it would be 92 dp at 13 sp). The Cảnh báo badge is themed through
   `badgeTheme` to `primary` / `onPrimary` (Flutter's default `Badge` colour is `error`), "99+" cap.
-- **Expanded (≥ 840 dp):** `NavigationRail`, `labelType: all`, top-aligned, FAB "Thêm mục tiêu" as `leading`.
+- **Expanded (≥ 840 dp wide and ≥ 480 dp tall):** `NavigationRail`, `labelType: all`, top-aligned, FAB "Thêm mục
+  tiêu" as `leading` (Tổng quan only, see FAB). A landscape phone (wide but under 480 dp tall) keeps the
+  `NavigationBar`: the rail does not scroll and at large text would push "Cài đặt" off screen.
 - **Top app bar:** small M3 app bar, `surface`, title `titleLarge`, start-aligned; `scrolledUnderElevation: 0` with
-  `surfaceContainer` as the scrolled-under colour. Icon buttons always carry a Vietnamese `tooltip`.
+  `surfaceContainer` as the scrolled-under colour. Icon buttons always carry a Vietnamese `tooltip`. On wide windows the
+  tab's app bar spans the whole area beside the rail (so the scrolled-under tint is not a slab over the centre
+  column); its title and actions align with the 720 dp content column (gutter + side inset; trailing text/icon buttons
+  end at the content edge), and the tab's FAB and snackbars stay inside the column.
 - **Back:** system Back and predictive Back always work (`PredictiveBackPageTransitionsBuilder` on Android); sheets
-  close on Back before the route pops.
+  close on Back before the route pops. On Giao dịch, Cảnh báo or Cài đặt, Back first returns to Tổng quan (the start
+  destination); only Back on Tổng quan leaves the app.
+- **Screen readers and keys:** each row in a list group is its own semantics node (a question row is read before its
+  own answer buttons); the Cảnh báo badge is read as "N cảnh báo chưa đọc" after the tab name; sheet scrims read
+  "Đóng"; Tab moves through a screen's content before its FAB and the navigation bar.
 
 ### Bottom sheets
 - Modal, `showDragHandle`, `isScrollControlled`, `useSafeArea`, max 88% height and 640 dp width, `surfaceContainerLow`,
@@ -811,18 +840,23 @@ width × 44 dp, ruler); no shimmer, no spinner.
 
 ### Goal progress row
 - Inside the "Mục tiêu tháng 10" list group. Leading disc: `Icons.savings_outlined` (Quỹ giữ) or
-  `Icons.shopping_basket_outlined` (Ngân sách). Title `goal.name`; meta "Quỹ giữ · 🏠 Thuê trọ" (+ `Icons.repeat` 16 dp
-  with semantics "Lặp lại hằng tháng"). Trailing `moneyList` remaining with caption "còn phải giữ" / "còn được chi".
+  `Icons.shopping_basket_outlined` (Ngân sách). Title `goal.name`; meta "Quỹ giữ · Thuê trọ" (default categories by
+  name only, user categories with their emoji: see Chips) + `Icons.repeat` 16 dp with semantics "Lặp lại hằng tháng",
+  joined to the last word so it never wraps onto a line of its own. Trailing `moneyList` remaining with caption "còn
+  phải giữ" / "còn được chi".
 - 6 dp bar under the text, radius `full`, track `surfaceContainerHighest`, no stop dot. Fill `primary`; budget ≥ 80%
   `warning.foreground`; over 100% `danger.foreground`; reserve fully paid `ok.foreground` with "Đã trả xong".
-- Caption `bodySmall`: "Đã chi 2.000.000đ / 5.000.000đ · 40%"; over: "Vượt 350.000đ" in `danger.foreground` 600;
+- Caption `bodySmall`: "Đã chi 2.000.000đ / 5.000.000đ · 40%" for a budget, "Đã trả 0đ / 3.000.000đ · 0%" for a Quỹ giữ
+  (money paid out of the fund reads as paying, not spending); over: "Vượt 350.000đ" in `danger.foreground` 600;
   forecast pace for that budget (`forecast.budgets[].status = over_pace`): "Theo nhịp này sẽ vượt ~1.000.000đ" in
   `warning.foreground`.
 
 ### Forecast block
 - A list group (no coloured border) titled by the section heading "Dự báo cuối tháng". First line: 20 dp icon
   (`insights` / `warning_amber_rounded` / `trending_down`) + server `headline` in `titleSmall` 600, coloured
-  `onSurface` (neutral), `warning.foreground` (floor hit this month) or `danger.foreground` (within 7 days).
+  `onSurface` (neutral) or `warning.foreground` when the floor will be hit, this month or within 7 days. The forecast
+  is never red: it is a warning about the future, not goal money in use (The Red Is Earned Rule), so "within 7 days"
+  is told by the `trending_down` icon, and red appears on Tổng quan only once the hero itself is DANGER.
 - Then up to two facts as sentences, stacked, in `bodyLarge` `onSurface` with the amount in `moneyBody` (16 sp / 700):
   "Nên chi tối đa ~120.000đ mỗi ngày" (`safe_daily_spend`, hidden when null) and "Cuối tháng dự kiến còn ~2.400.000đ
   được tiêu" or, when `projected_free_end` < 0, "Cuối tháng dự kiến thiếu ~350.000đ cho mục tiêu" (`forecast_free_end`).
@@ -837,15 +871,23 @@ width × 44 dp, ruler); no shimmer, no spinner.
   kind icon (`summarize_outlined` digest, `account_balance_outlined` account, `sync_problem` health).
 - Title `titleMedium` (700 unread, 500 read), message `bodyMedium` 2 lines, time `bodySmall`. Unread: 8 dp `primary`
   dot trailing with semantics "Chưa đọc". Tap opens the alert-detail bottom sheet. No coloured borders.
+- Server text is written for Telegram: the app strips the leading emoji of the title and of every message line and
+  drops bot-command hints ("— gõ /uncat để phân loại"); emoji inside a sentence (user categories) stay. Above 125% the
+  time and dot move under the title, which takes the full width (4 lines max, message 3).
+- Alert detail sheet: its one filled button names the next step: "Phân loại giao dịch" while the transaction is still
+  uncategorised (or for a digest that mentions uncategorised transactions, opening Giao dịch filtered), otherwise
+  "Xem giao dịch" / "Xem mục tiêu".
 
 ### Demo banner
 - Only in the web demo build (`DemoShell`). A full-width strip above every route (its colour extends under the status
   bar), at least 48 dp tall, `tertiaryContainer` / `onTertiaryContainer`, `Icons.science_outlined` 18 dp +
   "Bản dùng thử · dữ liệu giả" in `labelLarge`. Not dismissible. It carries exactly one demo control
   ("Giả lập biến động số dư", or "Kết nối lại bản dùng thử" after disconnecting) as a filled `tertiary` / `onTertiary`
-  button with a 48 dp target, so the demo never spends the cobalt reserved for "Thêm mục tiêu".
+  button, a 40 dp pill inside its 48 dp target plus 4 dp above and below, so the pill sits 8 dp clear of the strip's
+  edges; the demo never spends the cobalt reserved for "Thêm mục tiêu".
 - Layout follows `OverflowBar`: label and button share one row when both fit at their natural width (about 480 dp and
-  up at 100%); otherwise the button moves to a second row, end-aligned, and the strip grows to 88 dp (94 dp at 130%).
+  up at 100%; the strip is then 56 dp); otherwise the button moves to a second row, end-aligned, and the strip grows to
+  88 dp (94 dp at 130%).
   Neither text is ever ellipsized: at 360 dp the label alone needs 202 dp with its icon and the button 231 dp.
 
 ## Do's and Don'ts

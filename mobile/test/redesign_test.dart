@@ -406,7 +406,7 @@ void main() {
     final goal = tester.getSemantics(find.byKey(const ValueKey('goal_row_2')));
     expect(
       goal.getSemanticsData().label,
-      contains('Tiền ăn. Ngân sách, 🍜 Ăn uống. Lặp lại hằng tháng. Còn được chi 3000000 đồng.'),
+      contains('Tiền ăn. Ngân sách, Ăn uống. Lặp lại hằng tháng. Còn được chi 3000000 đồng.'),
     );
     expect(goal.getSemanticsData().label, contains('Đã chi 2000000 đồng trên 5000000 đồng, 40 phần trăm.'));
     expect(goal.getSemanticsData().label, contains('Theo nhịp này sẽ vượt khoảng 1000000 đồng'));

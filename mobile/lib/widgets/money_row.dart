@@ -224,7 +224,8 @@ class _RenderTitleAmount extends RenderBox with SlottedContainerRenderObjectMixi
   }
 
   Size _layout(BoxConstraints constraints, {required bool dry}) {
-    final width = constraints.maxWidth;
+    // Không bị giới hạn bề ngang (hiếm, vd. đo bề rộng tự nhiên): rộng bằng một dòng tiêu đề + số tiền.
+    final width = constraints.hasBoundedWidth ? constraints.maxWidth : getMaxIntrinsicWidth(double.infinity);
     Size place(RenderBox? child, BoxConstraints c) {
       if (child == null) return Size.zero;
       return dry ? ChildLayoutHelper.dryLayoutChild(child, c) : ChildLayoutHelper.layoutChild(child, c);

@@ -5,6 +5,7 @@ import '../models/goal.dart';
 import '../theme/status_colors.dart';
 import '../theme/tokens.dart';
 import '../theme/typography.dart';
+import 'category_icon.dart';
 import 'list_group.dart';
 import 'money_row.dart';
 import 'money_text.dart';
@@ -29,9 +30,11 @@ class GoalRow extends StatelessWidget {
   int get _over => goal.spent - goal.amount;
   bool get _paidOff => goal.isReserve && goal.amount > 0 && goal.remaining <= 0 && _over <= 0;
 
+  /// Danh mục cùng kiểu với Giao dịch: danh mục mặc định chỉ có tên (icon Material đi riêng ở nơi có chỗ), danh
+  /// mục tự tạo giữ emoji của người dùng ("🎮 Giải trí").
   String get _category => goal.categoryName == null
       ? (goal.isReserve ? 'Tiết kiệm thuần' : 'Chưa chọn danh mục')
-      : [if ((goal.categoryIcon ?? '').trim().isNotEmpty) goal.categoryIcon!.trim(), goal.categoryName!].join(' ');
+      : CategoryVisual.fromEmoji(goal.categoryIcon).label(goal.categoryName!);
 
   String get _spentVerb => goal.isReserve ? 'Đã trả' : 'Đã chi';
   String get _percent => '${goal.usagePct.toStringAsFixed(0)}%';

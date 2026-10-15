@@ -530,9 +530,8 @@ InputDecoration _numberDecoration(BuildContext context, {required String label, 
       labelText: label,
       hintText: hint,
       suffixText: suffix,
-      suffixStyle: Theme.of(context).textTheme.titleMedium!.copyWith(
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
+      suffixStyle: Theme.of(context).textTheme.titleMedium!
+          .copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
       constraints: const BoxConstraints(minHeight: 64),
       contentPadding: const EdgeInsets.symmetric(horizontal: Space.s4, vertical: Space.s5),
     );

@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../utils/currency.dart';
 import '../utils/dates.dart';
+import '../widgets/category_icon.dart';
 import '../widgets/common.dart';
 import '../widgets/form_parts.dart';
 import '../widgets/money_text.dart';
@@ -228,11 +229,7 @@ class _ManualTxScreenState extends State<ManualTxScreen> {
                         value: null,
                         child: Text('Chưa phân loại', overflow: TextOverflow.ellipsis),
                       ),
-                      for (final c in choices)
-                        DropdownMenuItem<int?>(
-                          value: c.id,
-                          child: Text(c.label, overflow: TextOverflow.ellipsis),
-                        ),
+                      for (final c in choices) DropdownMenuItem<int?>(value: c.id, child: CategoryOptionLabel(c)),
                     ],
                     onChanged: _saving || _categories == null ? null : (v) => setState(() => _categoryId = v),
                   ),

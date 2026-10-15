@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../utils/currency.dart';
 import '../utils/dates.dart';
+import '../widgets/category_icon.dart';
 import '../widgets/common.dart';
 import '../widgets/form_parts.dart';
 
@@ -472,11 +473,7 @@ class _GoalFormScreenState extends State<GoalFormScreen> {
       items: [
         if (allowNone)
           const DropdownMenuItem<int?>(value: null, child: Text('Tiết kiệm thuần', overflow: TextOverflow.ellipsis)),
-        for (final c in categories)
-          DropdownMenuItem<int?>(
-            value: c.id,
-            child: Text(c.label, overflow: TextOverflow.ellipsis),
-          ),
+        for (final c in categories) DropdownMenuItem<int?>(value: c.id, child: CategoryOptionLabel(c)),
       ],
       validator: _validateCategory,
       onChanged: _saving ? null : (v) => setState(() => _categoryId = v),

@@ -865,6 +865,14 @@ void main() {
       final keys = RegExp(r'\("(\w+)", "').allMatches(block).map((m) => m.group(1)!).toSet();
       expect(keys, isNotEmpty);
       expect(systemCategoryIcons.keys.toSet(), keys);
+      // Emoji mặc định của seed → system_key (mục tiêu chỉ có emoji): khớp đúng từng cặp trong seed.py.
+      final pairs = {
+        for (final m in RegExp(r'\("(\w+)", "[^"]*", "\w+", "([^"]+)"').allMatches(block)) m.group(2)!: m.group(1)!,
+      };
+      expect(systemCategoryEmoji, pairs);
+      expect(CategoryVisual.fromEmoji('🏠').icon, Icons.home_outlined);
+      expect(CategoryVisual.fromEmoji('🏠').label('Thuê trọ'), 'Thuê trọ');
+      expect(CategoryVisual.fromEmoji('🎮').label('Giải trí'), '🎮 Giải trí');
     });
 
     testWidgets('pill: "Chưa phân loại" là lời mời (primaryContainer), không phải lỗi', (tester) async {

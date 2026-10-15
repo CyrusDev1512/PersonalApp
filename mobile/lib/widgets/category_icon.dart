@@ -20,6 +20,21 @@ const Map<String, IconData> systemCategoryIcons = {
   'transfer': Icons.swap_horiz_outlined,
 };
 
+/// Emoji mặc định của các danh mục máy chủ tạo sẵn (backend/app/seed.py) → `system_key`. Dùng khi dữ liệu không
+/// kèm `system_key` (mục tiêu chỉ có `category_icon`), để mục tiêu và giao dịch hiện danh mục cùng một kiểu.
+const Map<String, String> systemCategoryEmoji = {
+  '🍜': 'food',
+  '🏠': 'rent',
+  '🛵': 'transport',
+  '🛒': 'shopping',
+  '🧾': 'bills',
+  '🐷': 'savings',
+  '📦': 'other',
+  '💰': 'income',
+  '↩️': 'refund',
+  '↔️': 'transfer',
+};
+
 /// Hình đại diện của một danh mục: icon Material (danh mục mặc định) hoặc emoji (danh mục tự tạo).
 @immutable
 class CategoryVisual {
@@ -35,6 +50,12 @@ class CategoryVisual {
 
   factory CategoryVisual.of(Category category) =>
       CategoryVisual.resolve(systemKey: category.systemKey, emoji: category.icon);
+
+  /// Chỉ biết emoji (mục tiêu): emoji mặc định của danh mục máy chủ → icon như ở Giao dịch; emoji khác → emoji.
+  factory CategoryVisual.fromEmoji(String? emoji) {
+    final e = emoji?.trim();
+    return CategoryVisual.resolve(systemKey: e == null ? null : systemCategoryEmoji[e], emoji: e);
+  }
 
   final IconData? icon;
   final String? emoji;
@@ -64,5 +85,27 @@ class CategoryAvatar extends StatelessWidget {
     if (visual.icon != null) return LeadingDisc(icon: visual.icon);
     if (visual.emoji != null) return LeadingDisc(text: visual.emoji);
     return LeadingDisc(icon: fallbackIcon);
+  }
+}
+
+/// Nội dung một mục danh mục trong ô chọn (form mục tiêu, nhập tay): icon + tên (danh mục mặc định) hoặc
+/// "emoji + tên" (danh mục tự tạo), giống chip ở bảng phân loại.
+class CategoryOptionLabel extends StatelessWidget {
+  const CategoryOptionLabel(this.category, {super.key});
+
+  final Category category;
+
+  @override
+  Widget build(BuildContext context) {
+    final visual = CategoryVisual.of(category);
+    final text = Text(visual.label(category.name), overflow: TextOverflow.ellipsis);
+    if (visual.icon == null) return text;
+    return Row(
+      children: [
+        Icon(visual.icon, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        const SizedBox(width: 8),
+        Flexible(child: text),
+      ],
+    );
   }
 }

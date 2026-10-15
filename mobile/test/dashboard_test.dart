@@ -96,8 +96,10 @@ void main() {
     // Mục tiêu: hàng trong một nhóm, thanh 6 dp, chú thích tiến độ.
     expect(find.text('Mục tiêu tháng 10'), findsOneWidget);
     expect(find.text('Tiền trọ'), findsOneWidget);
-    expect(find.textContaining('Quỹ giữ · 🏠 Thuê trọ'), findsOneWidget);
-    expect(find.textContaining('Ngân sách · 🍜 Ăn uống'), findsOneWidget);
+    // Danh mục mặc định: chỉ tên (cùng kiểu với Giao dịch, nơi icon danh mục là icon Material, không emoji).
+    expect(find.textContaining('Quỹ giữ · Thuê trọ'), findsOneWidget);
+    expect(find.textContaining('Ngân sách · Ăn uống'), findsOneWidget);
+    expect(find.textContaining('🏠'), findsNothing);
     expect(find.text('Đã chi 2.000.000đ / 5.000.000đ · 40%'), findsOneWidget);
     expect(find.byKey(const ValueKey('goal_progress_1')), findsOneWidget);
     expect(find.byKey(const ValueKey('goal_progress_2')), findsOneWidget);
@@ -341,7 +343,7 @@ void main() {
     await tester.enterText(find.byKey(const Key('goal_amount')), '3500000');
     await tester.tap(find.byKey(const ValueKey('goal_category_reserve')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('🏠 Thuê trọ').last);
+    await tester.tap(find.text('Thuê trọ').last);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('goal_series_hint')), findsNothing);
     await tester.tap(find.text('Tháng 11'));
