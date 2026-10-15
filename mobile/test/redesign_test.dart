@@ -249,15 +249,59 @@ void main() {
     expect(find.text('Sắp chạm mức mục tiêu'), findsOneWidget);
     expect(find.text('Bản tin sáng'), findsNothing);
 
-    // Mở cảnh báo: đánh dấu đã đọc, bảng chi tiết có nút "Xem giao dịch".
+    // Mở cảnh báo: đánh dấu đã đọc; giao dịch còn chưa phân loại nên nút nói đúng việc: "Phân loại giao dịch".
     await tester.tap(find.text('Sắp chạm mức mục tiêu'));
     await tester.pumpAndSettle();
     expect(server.where('POST', '/api/alerts/10/read'), hasLength(1));
     expect(find.text('09:59, Thứ Tư 14/10/2026'), findsOneWidget);
-    await tester.tap(find.text('Xem giao dịch'));
+    expect(find.text('Xem giao dịch'), findsNothing);
+    await tester.tap(find.text('Phân loại giao dịch'));
     await tester.pumpAndSettle();
+    // Giao dịch tải sẵn khi mở bảng, dùng lại khi bấm (không tải hai lần).
     expect(server.where('GET', '/api/transactions/55'), hasLength(1));
     expect(find.byType(TxActionSheet), findsOneWidget);
+  });
+
+  testWidgets('Cảnh báo: nội dung bỏ emoji đầu dòng và lệnh bot; bản tin nhắc chưa phân loại mở Giao dịch đã lọc', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    const digest =
+        '✅ An toàn — Còn 4.000.000đ được tiêu\n'
+        '• 🏠 Tiền trọ (quỹ giữ): 0đ/3.000.000đ · còn cần 3.000.000đ\n'
+        '📈 Dự báo: Chi như hiện tại thì cuối tháng vẫn trên mức sàn\n'
+        '   🍜 Tiền ăn: theo nhịp này sẽ vượt ~200.000đ\n'
+        '🏷️ 2 giao dịch chưa phân loại — gõ /uncat để phân loại.';
+    final (server, _) = await _pump(
+      tester,
+      extra: {
+        'GET /api/alerts': (_) => [
+          {..._alert(9, '2026-10-14T01:00:00Z', read: true, title: '☀️ Bản tin tài chính 14/10'), 'message': digest},
+        ],
+      },
+    );
+    await _goTab(tester, 'Cảnh báo');
+    expect(find.textContaining('✅'), findsNothing);
+    expect(find.textContaining('An toàn — Còn 4.000.000đ được tiêu'), findsOneWidget);
+
+    await tester.tap(find.text('Bản tin tài chính 14/10'));
+    await tester.pumpAndSettle();
+    final body = tester.widget<SelectableText>(find.byType(SelectableText)).data!;
+    expect(body, isNot(contains('/uncat')));
+    expect(body, isNot(contains('📈')));
+    expect(body, isNot(contains('🏷')));
+    expect(body, contains('• 🏠 Tiền trọ'), reason: 'emoji danh mục giữa câu giữ nguyên');
+    expect(body, contains('   Tiền ăn: theo nhịp này'), reason: 'giữ thụt lề dòng chi tiết');
+    expect(body, contains('2 giao dịch chưa phân loại.'));
+    // Vùng tối sau bảng đọc "Đóng" (không phải "Scrim").
+    expect(find.bySemanticsLabel('Scrim'), findsNothing);
+    expect(find.bySemanticsLabel('Đóng'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('alert_detail_action')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex, 1);
+    expect(server.where('GET', '/api/transactions').last.url.queryParameters['uncategorized'], 'true');
+    handle.dispose();
   });
 
   testWidgets('Cảnh báo: bộ lọc "Chưa đọc" trống thì báo bình thản', (tester) async {
