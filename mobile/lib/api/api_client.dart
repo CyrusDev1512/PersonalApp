@@ -361,4 +361,8 @@ class ApiClient {
 
   Future<AppSettings> updateSettings(AppSettings settings) async =>
       AppSettings.fromJson(_map(await _request('PUT', '/api/settings', body: settings.toJson())));
+
+  /// PUT /api/settings với một tập con các trường (vd. `{"notify_every_tx": false}`), docs/api.md › Cài đặt.
+  Future<AppSettings> updateSettingsFields(JsonMap changes) async =>
+      AppSettings.fromJson(_map(await _request('PUT', '/api/settings', body: changes)));
 }

@@ -122,7 +122,9 @@ class AlertDetailSheet extends StatelessWidget {
             primary: FilledButton.icon(
               key: const Key('alert_detail_action'),
               onPressed: () => Navigator.of(context).pop(action),
-              icon: Icon(action == AlertSheetAction.openTransaction ? Icons.receipt_long_outlined : Icons.flag_outlined),
+              icon: Icon(
+                action == AlertSheetAction.openTransaction ? Icons.receipt_long_outlined : Icons.flag_outlined,
+              ),
               label: Text(action == AlertSheetAction.openTransaction ? 'Xem giao dịch' : 'Xem mục tiêu'),
             ),
           ),

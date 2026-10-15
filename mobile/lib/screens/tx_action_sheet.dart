@@ -415,7 +415,8 @@ class _TxActionSheetState extends State<TxActionSheet> {
           icon: Icons.content_copy,
           iconColor: status.warning.foreground,
           textColor: scheme.onSurface,
-          text: 'Có thể trùng với giao dịch #${tx.possibleDuplicateOf}. Nếu đúng là trùng, hãy bật "Loại trừ" cho một bản.',
+          text:
+              'Có thể trùng với giao dịch #${tx.possibleDuplicateOf}. Nếu đúng là trùng, hãy bật "Loại trừ" cho một bản.',
         ),
       ],
       if (tx.isPending) ...[

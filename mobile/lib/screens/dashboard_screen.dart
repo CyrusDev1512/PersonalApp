@@ -127,7 +127,12 @@ class _DashboardBody extends StatelessWidget {
         _UncategorizedRow(count: summary.uncategorizedCount, onTap: onOpenUncategorized),
       if (client != null)
         for (final account in summary.unconfirmedAccounts)
-          _NewAccountRow(key: ValueKey('new_account_${account.id}'), account: account, client: client, onSaved: state.load),
+          _NewAccountRow(
+            key: ValueKey('new_account_${account.id}'),
+            account: account,
+            client: client,
+            onSaved: state.load,
+          ),
       if (client != null && summary.level != Level.unknown && missing.isNotEmpty)
         _MissingBalanceRow(accounts: missing, onEnter: () => _enterBalance(context, client)),
       if (summary.ingestHealth.hasProblems) _IngestHealthRow(health: summary.ingestHealth),
@@ -158,10 +163,7 @@ class _DashboardBody extends StatelessWidget {
           now: now,
           onUnknownAction: client == null ? null : () => _enterBalance(context, client),
         ),
-        if (reviewRows.isNotEmpty) ...[
-          const SectionHeader('Cần bạn xem'),
-          ListGroup(children: reviewRows),
-        ],
+        if (reviewRows.isNotEmpty) ...[const SectionHeader('Cần bạn xem'), ListGroup(children: reviewRows)],
         if (ForecastCard.shouldShow(summary.forecast)) ...[
           const SectionHeader('Dự báo cuối tháng'),
           ForecastCard(forecast: summary.forecast, month: summary.month),
@@ -240,7 +242,7 @@ class _UncategorizedRow extends StatelessWidget {
 
 /// Một hàng có câu hỏi và nút trả lời ngay dưới câu (giữ thẳng hàng với chữ, không bóp chữ khi chữ lớn).
 class _ReviewRow extends StatelessWidget {
-  const _ReviewRow({super.key, required this.leading, required this.text, required this.actions});
+  const _ReviewRow({required this.leading, required this.text, required this.actions});
 
   final Widget leading;
   final String text;
@@ -325,9 +327,7 @@ class _MissingBalanceRow extends StatelessWidget {
     return _ReviewRow(
       leading: const LeadingDisc(icon: Icons.account_balance_wallet_outlined),
       text: 'Chưa biết số dư của: ${accounts.map((a) => a.displayName).join(', ')}',
-      actions: [
-        TextButton(key: const Key('enter_balance'), onPressed: onEnter, child: const Text('Nhập số dư')),
-      ],
+      actions: [TextButton(key: const Key('enter_balance'), onPressed: onEnter, child: const Text('Nhập số dư'))],
     );
   }
 }
@@ -428,7 +428,10 @@ class _NextMonthGoalsState extends State<_NextMonthGoals> {
         ),
         if (_open)
           for (final goal in widget.goals)
-            GoalRow(goal: goal, onTap: () => DashboardScreen.openGoalForm(context, goal: goal)),
+            GoalRow(
+              goal: goal,
+              onTap: () => DashboardScreen.openGoalForm(context, goal: goal),
+            ),
       ],
     );
   }

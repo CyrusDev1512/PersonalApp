@@ -98,7 +98,9 @@ class ForecastCard extends StatelessWidget {
         children: [
           FirstLineIcon(_icon(severity), size: 20, textStyle: headlineStyle, color: color ?? scheme.onSurfaceVariant),
           const SizedBox(width: Space.s2),
-          Expanded(child: Text(headline, key: const Key('forecast_headline'), style: headlineStyle)),
+          Expanded(
+            child: Text(headline, key: const Key('forecast_headline'), style: headlineStyle),
+          ),
         ],
       ),
       if (safe != null) ...[

@@ -170,38 +170,38 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _bottomBar(int unread, String alertsBadge) {
     return NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: _select,
-        destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Tổng quan',
+      selectedIndex: _index,
+      onDestinationSelected: _select,
+      destinations: [
+        const NavigationDestination(
+          icon: Icon(Icons.dashboard_outlined),
+          selectedIcon: Icon(Icons.dashboard),
+          label: 'Tổng quan',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.receipt_long_outlined),
+          selectedIcon: Icon(Icons.receipt_long),
+          label: 'Giao dịch',
+        ),
+        NavigationDestination(
+          icon: Badge(
+            isLabelVisible: unread > 0,
+            label: Text(alertsBadge),
+            child: const Icon(Icons.notifications_outlined),
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Giao dịch',
+          selectedIcon: Badge(
+            isLabelVisible: unread > 0,
+            label: Text(alertsBadge),
+            child: const Icon(Icons.notifications),
           ),
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: unread > 0,
-              label: Text(alertsBadge),
-              child: const Icon(Icons.notifications_outlined),
-            ),
-            selectedIcon: Badge(
-              isLabelVisible: unread > 0,
-              label: Text(alertsBadge),
-              child: const Icon(Icons.notifications),
-            ),
-            label: 'Cảnh báo',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Cài đặt',
-          ),
-        ],
+          label: 'Cảnh báo',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.settings_outlined),
+          selectedIcon: Icon(Icons.settings),
+          label: 'Cài đặt',
+        ),
+      ],
     );
   }
 }

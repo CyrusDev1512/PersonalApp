@@ -233,10 +233,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
               padding: EdgeInsets.only(top: i == 0 ? Space.s2 : Space.s6, bottom: Space.s2),
               child: Semantics(
                 header: true,
-                child: Text(
-                  e,
-                  style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
+                child: Text(e, style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
               ),
             );
           }

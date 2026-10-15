@@ -3,18 +3,45 @@ import 'package:flutter/services.dart';
 
 import '../api/api_client.dart';
 import '../models/account.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
 import '../utils/currency.dart';
+import '../utils/dates.dart';
+import 'form_parts.dart';
+import 'money_text.dart';
 
 /// Lựa chọn ngân hàng trong form (giá trị gửi lên API).
 const Map<String, String> bankChoices = {'VCB': 'Vietcombank (VCB)', 'MB': 'MB Bank', 'OTHER': 'Khác'};
 
-/// Mở form thêm (account == null) hoặc sửa tài khoản. Trả về TK sau khi lưu,
-/// hoặc `null` nếu huỷ / đã xoá ([AccountFormResult.deleted]).
-Future<AccountFormResult?> showAccountForm(BuildContext context, {required ApiClient client, Account? account}) {
-  return showDialog<AccountFormResult>(
-    context: context,
-    builder: (_) => AccountFormDialog(client: client, account: account),
+Future<T?> _showFormSheet<T>(BuildContext context, WidgetBuilder builder) => showModalBottomSheet<T>(
+  context: context,
+  isScrollControlled: true,
+  showDragHandle: true,
+  useSafeArea: true,
+  constraints: AppLayout.sheetConstraints(context),
+  builder: builder,
+);
+
+/// Mở bảng thêm (account == null) hoặc sửa tài khoản (surfaces/account-sheet/brief.md). Trả về TK sau khi lưu,
+/// hoặc `null` nếu đóng; [AccountFormResult.deleted] khi đã xoá. Lưu xong thì hiện SnackBar ở màn bên dưới.
+Future<AccountFormResult?> showAccountForm(BuildContext context, {required ApiClient client, Account? account}) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final result = await _showFormSheet<AccountFormResult>(
+    context,
+    (_) => AccountFormSheet(client: client, account: account),
   );
+  if (result != null && messenger != null) {
+    final saved = result.account;
+    final message = result.deleted
+        ? 'Đã xoá tài khoản'
+        : account == null && saved != null
+        ? 'Đã thêm tài khoản "${saved.name.isEmpty ? saved.bankLabel : saved.name}"'
+        : 'Đã lưu tài khoản';
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+  return result;
 }
 
 class AccountFormResult {
@@ -24,21 +51,25 @@ class AccountFormResult {
   final bool deleted;
 }
 
-class AccountFormDialog extends StatefulWidget {
-  const AccountFormDialog({super.key, required this.client, this.account});
+/// Bảng thêm / sửa tài khoản: ngân hàng, số TK, tên gợi nhớ, số dư hiện tại, "Tính vào tổng số dư" (và "Đây là
+/// tài khoản của tôi" cho TK tự phát hiện); "Xoá tài khoản" ở cuối khi sửa; nút chính dính ở đáy.
+class AccountFormSheet extends StatefulWidget {
+  const AccountFormSheet({super.key, required this.client, this.account});
 
   final ApiClient client;
   final Account? account;
 
   @override
-  State<AccountFormDialog> createState() => _AccountFormDialogState();
+  State<AccountFormSheet> createState() => _AccountFormSheetState();
 }
 
-class _AccountFormDialogState extends State<AccountFormDialog> {
+class _AccountFormSheetState extends State<AccountFormSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _number;
   late final TextEditingController _name;
   late final TextEditingController _balance;
+  final _numberFocus = FocusNode();
+  final _nameFocus = FocusNode();
   late String _bank;
   late bool _includeInTotal;
   late bool _confirmed;
@@ -66,11 +97,28 @@ class _AccountFormDialogState extends State<AccountFormDialog> {
     _number.dispose();
     _name.dispose();
     _balance.dispose();
+    _numberFocus.dispose();
+    _nameFocus.dispose();
     super.dispose();
   }
 
+  static String? _validateNumber(String? v) {
+    final s = v?.trim() ?? '';
+    if (s.isNotEmpty && s.length < 4) return 'Số tài khoản cần ít nhất 4 chữ số';
+    return null;
+  }
+
+  static String? _validateName(String? v) => (v == null || v.trim().isEmpty) ? 'Nhập tên tài khoản' : null;
+
   Future<void> _save() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      if (_validateNumber(_number.text) != null && !(widget.account?.isCash ?? false)) {
+        _numberFocus.requestFocus();
+      } else if (_validateName(_name.text) != null) {
+        _nameFocus.requestFocus();
+      }
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -102,7 +150,7 @@ class _AccountFormDialogState extends State<AccountFormDialog> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = e.message;
+          _error = e.isNetwork ? 'Không kết nối được máy chủ. Tài khoản chưa được lưu.' : e.message;
         });
       }
     }
@@ -111,6 +159,7 @@ class _AccountFormDialogState extends State<AccountFormDialog> {
   Future<void> _delete() async {
     final a = widget.account;
     if (a == null) return;
+    final scheme = Theme.of(context).colorScheme;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -118,7 +167,11 @@ class _AccountFormDialogState extends State<AccountFormDialog> {
         content: Text('Xoá "${a.displayName}". Chỉ xoá được tài khoản chưa có giao dịch.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Xoá')),
+          FilledButton(
+            style: AppButtonStyles.destructiveFilled(scheme),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Xoá'),
+          ),
         ],
       ),
     );
@@ -144,139 +197,173 @@ class _AccountFormDialogState extends State<AccountFormDialog> {
   Widget build(BuildContext context) {
     final a = widget.account;
     final theme = Theme.of(context);
-    return AlertDialog(
-      title: Text(_editing ? 'Sửa tài khoản' : 'Thêm tài khoản'),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_editing)
-                InputDecorator(
-                  decoration: const InputDecoration(labelText: 'Ngân hàng'),
-                  child: Text(bankLabelOf(a!.bank)),
-                )
-              else
-                DropdownButtonFormField<String>(
-                  initialValue: _bank,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Ngân hàng'),
-                  items: [
-                    for (final e in bankChoices.entries)
-                      DropdownMenuItem(
-                        value: e.key,
-                        child: Text(e.value, overflow: TextOverflow.ellipsis),
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(Space.s5, 0, Space.s5, Space.s4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        _editing ? 'Sửa tài khoản' : 'Thêm tài khoản',
+                        style: theme.textTheme.headlineSmall?.copyWith(color: scheme.onSurface),
                       ),
+                    ),
+                    const SizedBox(height: Space.s5),
+                    if (_editing)
+                      InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Ngân hàng', enabled: false),
+                        child: Text(bankLabelOf(a!.bank), style: theme.textTheme.bodyLarge),
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        initialValue: _bank,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Ngân hàng'),
+                        items: [
+                          for (final e in bankChoices.entries)
+                            DropdownMenuItem(
+                              value: e.key,
+                              child: Text(e.value, overflow: TextOverflow.ellipsis),
+                            ),
+                        ],
+                        onChanged: _saving ? null : (v) => setState(() => _bank = v ?? 'VCB'),
+                      ),
+                    if (!(a?.isCash ?? false)) ...[
+                      const SizedBox(height: Space.s4),
+                      TextFormField(
+                        controller: _number,
+                        focusNode: _numberFocus,
+                        enabled: !_saving,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: InputDecoration(
+                          labelText: 'Số tài khoản',
+                          hintText: _bank == 'OTHER' ? 'Tuỳ chọn' : null,
+                          helperText: 'Dùng để nhận diện biến động từ webhook/email',
+                        ),
+                        validator: _validateNumber,
+                      ),
+                    ],
+                    const SizedBox(height: Space.s4),
+                    TextFormField(
+                      controller: _name,
+                      focusNode: _nameFocus,
+                      enabled: !_saving,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(labelText: 'Tên gợi nhớ', hintText: 'VD: VCB chính'),
+                      validator: _validateName,
+                    ),
+                    const SizedBox(height: Space.s4),
+                    MoneyField(
+                      controller: _balance,
+                      enabled: !_saving,
+                      label: 'Số dư hiện tại',
+                      hint: 'VD: 6.200.000',
+                      helper: _editing
+                          ? 'Để trống nếu không đổi. Hiện tại: ${a!.balance == null ? 'chưa có' : MoneyParts.of(a.balance!).text}'
+                          : 'Có thể để trống và nhập sau',
+                    ),
+                    const SizedBox(height: Space.s2),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Tính vào tổng số dư'),
+                      subtitle: const Text('Tắt cho TK tiết kiệm riêng'),
+                      value: _includeInTotal,
+                      onChanged: _saving
+                          ? null
+                          : (v) => setState(() {
+                              _includeInTotal = v;
+                              // Tính vào tổng nghĩa là TK của mình: server cũng xác nhận luôn TK.
+                              if (v) _confirmed = true;
+                            }),
+                    ),
+                    if (a != null && !a.confirmed)
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Đây là tài khoản của tôi'),
+                        subtitle: const Text('TK này được tự phát hiện từ biến động'),
+                        value: _confirmed,
+                        onChanged: _saving
+                            ? null
+                            : (v) => setState(() {
+                                _confirmed = v;
+                                // TK chưa xác nhận thì không tính vào tổng.
+                                if (!_confirmed) _includeInTotal = false;
+                              }),
+                      ),
+                    if (_editing && !(a?.isCash ?? false)) ...[
+                      const SizedBox(height: Space.s6),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          style: AppButtonStyles.destructiveText(scheme),
+                          onPressed: _saving ? null : _delete,
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Xoá tài khoản'),
+                        ),
+                      ),
+                    ],
                   ],
-                  onChanged: _saving ? null : (v) => setState(() => _bank = v ?? 'VCB'),
-                ),
-              if (!(a?.isCash ?? false))
-                TextFormField(
-                  controller: _number,
-                  enabled: !_saving,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                    labelText: 'Số tài khoản',
-                    helperText: 'Dùng để nhận diện biến động từ webhook/email',
-                  ),
-                  validator: (v) {
-                    final s = v?.trim() ?? '';
-                    if (s.isNotEmpty && s.length < 4) return 'Số tài khoản cần ít nhất 4 chữ số';
-                    return null;
-                  },
-                ),
-              TextFormField(
-                controller: _name,
-                enabled: !_saving,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(labelText: 'Tên gợi nhớ', hintText: 'VD: VCB chính'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập tên tài khoản' : null,
-              ),
-              TextFormField(
-                controller: _balance,
-                enabled: !_saving,
-                keyboardType: TextInputType.number,
-                inputFormatters: const [VndInputFormatter()],
-                decoration: InputDecoration(
-                  labelText: 'Số dư hiện tại',
-                  suffixText: 'đ',
-                  helperText: _editing
-                      ? 'Để trống nếu không đổi. Hiện tại: ${formatVndOrDash(a!.balance)}'
-                      : 'Có thể để trống và nhập sau',
-                  helperMaxLines: 2,
                 ),
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Tính vào tổng số dư'),
-                subtitle: const Text('Tắt cho TK tiết kiệm riêng'),
-                value: _includeInTotal,
-                onChanged: _saving
-                    ? null
-                    : (v) => setState(() {
-                        _includeInTotal = v;
-                        // Tính vào tổng nghĩa là TK của mình: server cũng xác nhận luôn TK.
-                        if (v) _confirmed = true;
-                      }),
+            ),
+            StickyActionBar(
+              horizontalPadding: Space.s5,
+              error: _error,
+              primary: FilledButton.icon(
+                key: const Key('account_save'),
+                onPressed: _saving ? null : _save,
+                icon: _saving ? const BusyIcon() : null,
+                label: Text(_editing ? 'Lưu tài khoản' : 'Thêm tài khoản'),
               ),
-              if (a != null && !a.confirmed)
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Xác nhận TK mới'),
-                  subtitle: const Text('TK này được tự phát hiện từ biến động — xác nhận là của bạn'),
-                  value: _confirmed,
-                  onChanged: _saving
-                      ? null
-                      : (v) => setState(() {
-                          _confirmed = v ?? false;
-                          // TK chưa xác nhận thì không tính vào tổng.
-                          if (!_confirmed) _includeInTotal = false;
-                        }),
-                ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
-              ],
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        if (_editing && !(a?.isCash ?? false))
-          TextButton(
-            onPressed: _saving ? null : _delete,
-            style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
-            child: const Text('Xoá'),
-          ),
-        TextButton(onPressed: _saving ? null : () => Navigator.pop(context), child: const Text('Huỷ')),
-        FilledButton(onPressed: _saving ? null : _save, child: Text(_saving ? 'Đang lưu…' : 'Lưu')),
-      ],
     );
   }
 }
 
-/// Hộp thoại "Nhập số dư" cho một tài khoản (đặt số dư hiện tại làm mốc).
-Future<Account?> showBalanceDialog(BuildContext context, {required ApiClient client, required Account account}) {
-  return showDialog<Account>(
-    context: context,
-    builder: (_) => BalanceDialog(client: client, account: account),
-  );
+/// Mở bảng "Nhập số dư" cho một tài khoản (đặt số dư hiện tại làm mốc). Lưu xong thì hiện SnackBar
+/// "Đã cập nhật số dư …" ở màn bên dưới.
+Future<Account?> showBalanceDialog(BuildContext context, {required ApiClient client, required Account account}) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final saved = await _showFormSheet<Account>(context, (_) => BalanceSheet(client: client, account: account));
+  if (saved != null && saved.balance != null) {
+    messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text('Đã cập nhật số dư ${account.displayName}: ${MoneyParts.of(saved.balance!).text}')),
+      );
+  }
+  return saved;
 }
 
-class BalanceDialog extends StatefulWidget {
-  const BalanceDialog({super.key, required this.client, required this.account});
+/// Bảng "Nhập số dư": tài khoản (là thông tin, không phải ô nhập), một câu hướng dẫn, ô số dư (chọn sẵn số cũ
+/// để gõ là thay), nút "Lưu số dư" dính ở đáy.
+class BalanceSheet extends StatefulWidget {
+  const BalanceSheet({super.key, required this.client, required this.account});
 
   final ApiClient client;
   final Account account;
 
   @override
-  State<BalanceDialog> createState() => _BalanceDialogState();
+  State<BalanceSheet> createState() => _BalanceSheetState();
 }
 
-class _BalanceDialogState extends State<BalanceDialog> {
+class _BalanceSheetState extends State<BalanceSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _balance;
   bool _saving = false;
@@ -286,7 +373,14 @@ class _BalanceDialogState extends State<BalanceDialog> {
   void initState() {
     super.initState();
     final b = widget.account.balance;
-    _balance = TextEditingController(text: b == null ? '' : formatGrouped(b));
+    final text = b == null ? '' : formatGrouped(b);
+    // Số cũ được chọn sẵn: gõ số mới là thay, không nối vào sau số cũ.
+    _balance = TextEditingController.fromValue(
+      TextEditingValue(
+        text: text,
+        selection: TextSelection(baseOffset: 0, extentOffset: text.length),
+      ),
+    );
   }
 
   @override
@@ -308,7 +402,7 @@ class _BalanceDialogState extends State<BalanceDialog> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = e.message;
+          _error = e.isNetwork ? 'Không kết nối được máy chủ. Số dư chưa được lưu.' : e.message;
         });
       }
     }
@@ -316,40 +410,80 @@ class _BalanceDialogState extends State<BalanceDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Nhập số dư'),
-      content: Form(
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final a = widget.account;
+    final asOf = a.balanceAsOf;
+    final small = theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.account.displayName, style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 4),
-            const Text(
-              'Mở app ngân hàng và nhập đúng số dư hiện tại. Các biến động sau đó sẽ được cộng/trừ từ mốc này.',
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(Space.s5, 0, Space.s5, Space.s4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        'Nhập số dư',
+                        style: theme.textTheme.headlineSmall?.copyWith(color: scheme.onSurface),
+                      ),
+                    ),
+                    const SizedBox(height: Space.s4),
+                    Text(a.displayName, style: theme.textTheme.titleMedium?.copyWith(color: scheme.onSurface)),
+                    if (a.balance == null)
+                      Text('Chưa có số dư', style: small)
+                    else
+                      MoneySentence([
+                        'Số dư hiện tại: ',
+                        a.balance!,
+                        if (asOf != null) ' · cập nhật ${formatTimeOrDateIct(asOf, DateTime.now())}',
+                      ], style: small),
+                    const SizedBox(height: Space.s3),
+                    Text(
+                      'Mở app ngân hàng và nhập đúng số dư hiện tại. Các biến động sau đó sẽ được cộng/trừ từ mốc này.',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface),
+                    ),
+                    const SizedBox(height: Space.s4),
+                    MoneyField(
+                      controller: _balance,
+                      autofocus: true,
+                      enabled: !_saving,
+                      label: 'Số dư hiện tại',
+                      hint: 'VD: 6.200.000',
+                      textInputAction: TextInputAction.done,
+                      validator: (v) => parseVnd(v) == null ? 'Nhập số dư (có thể là 0)' : null,
+                      onFieldSubmitted: (_) => _save(),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            TextFormField(
-              controller: _balance,
-              autofocus: true,
-              enabled: !_saving,
-              keyboardType: TextInputType.number,
-              inputFormatters: const [VndInputFormatter()],
-              decoration: const InputDecoration(labelText: 'Số dư hiện tại', suffixText: 'đ'),
-              validator: (v) => parseVnd(v) == null ? 'Nhập số dư (có thể là 0)' : null,
-              onFieldSubmitted: (_) => _save(),
+            StickyActionBar(
+              horizontalPadding: Space.s5,
+              error: _error,
+              primary: FilledButton.icon(
+                key: const Key('balance_save'),
+                onPressed: _saving ? null : _save,
+                icon: _saving ? const BusyIcon() : null,
+                label: const Text('Lưu số dư'),
+              ),
             ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ],
           ],
         ),
       ),
-      actions: [
-        TextButton(onPressed: _saving ? null : () => Navigator.pop(context), child: const Text('Huỷ')),
-        FilledButton(onPressed: _saving ? null : _save, child: Text(_saving ? 'Đang lưu…' : 'Lưu số dư')),
-      ],
     );
   }
 }
+
+/// Tên cũ (trước khi chuyển sang bảng trượt), giữ cho mã gọi cũ.
+typedef AccountFormDialog = AccountFormSheet;
+typedef BalanceDialog = BalanceSheet;

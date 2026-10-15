@@ -47,7 +47,9 @@ class AccountRow extends StatelessWidget {
               'chưa biết số dư',
               style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
-      below: a.confirmed ? null : const Pill('Chưa xác nhận', tone: PillTone.warning, icon: Icons.new_releases_outlined),
+      below: a.confirmed
+          ? null
+          : const Pill('Chưa xác nhận', tone: PillTone.warning, icon: Icons.new_releases_outlined),
       onTap: onTap,
     );
   }

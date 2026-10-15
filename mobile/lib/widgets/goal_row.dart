@@ -80,10 +80,10 @@ class GoalRow extends StatelessWidget {
 
     final captions = <Widget>[
       if (over > 0)
-        MoneySentence(
-          ['Vượt ', over],
-          style: small.copyWith(color: status.danger.foreground, fontWeight: FontWeight.w600),
-        )
+        MoneySentence([
+          'Vượt ',
+          over,
+        ], style: small.copyWith(color: status.danger.foreground, fontWeight: FontWeight.w600))
       else
         MoneySentence(['$_spentVerb ', goal.spent, ' / ', goal.amount, ' · $_percent'], style: small),
       if (_paceOverrun case final o?)
@@ -116,17 +116,17 @@ class GoalRow extends StatelessWidget {
       ),
       amount: MoneyText(goal.remaining, style: MoneyStyle.list),
       amountCaption: _paidOff
-          ? Text('Đã trả xong', style: small.copyWith(color: status.ok.foreground, fontWeight: FontWeight.w600))
+          ? Text(
+              'Đã trả xong',
+              style: small.copyWith(color: status.ok.foreground, fontWeight: FontWeight.w600),
+            )
           : Text(goal.isReserve ? 'còn phải giữ' : 'còn được chi'),
       below: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _ProgressBar(key: ValueKey('goal_progress_${goal.id}'), value: goal.progress, color: barColor),
           const SizedBox(height: Space.s2),
-          for (var i = 0; i < captions.length; i++) ...[
-            if (i > 0) const SizedBox(height: Space.s1),
-            captions[i],
-          ],
+          for (var i = 0; i < captions.length; i++) ...[if (i > 0) const SizedBox(height: Space.s1), captions[i]],
         ],
       ),
       semanticLabel: semanticLabel(),
