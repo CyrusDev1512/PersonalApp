@@ -25,3 +25,15 @@ cookies.json
 
 # Profile cookies and state (keep .gitkeep)
 profiles/*/
+
+# Local request-probe journal and user-provided input
+.probe/
+private/
+
+# Portable desktop runtime placed beside the source for convenient launching
+/CommentLab.exe
+/_internal/
+/desktop.lock
+/desktop-runtime.json
+/desktop-events.jsonl
+/app-window-*/

@@ -1,0 +1,4 @@
+# Build tools only. Pin resolved versions in dist/build-environment.txt per release.
+pyinstaller>=6,<7
+requests>=2.32.5,<3
+python-dotenv>=1.2.2,<2

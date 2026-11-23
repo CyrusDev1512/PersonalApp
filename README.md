@@ -3,6 +3,15 @@
 
 # fbkit
 
+> **Comment Lab UI:** chạy `MO-COMMENT-LAB.cmd` tại `C:\Tools\FacebookCommentLab`.
+> Giao diện local: `http://127.0.0.1:8790/`. Xem [hướng dẫn giao diện và phiên](HUONG-DAN-GIAO-DIEN.md).
+> Giao diện không đọc cookie Chrome tự động; người dùng tự nhập phiên trên máy.
+
+> **Local request-only test build:** xem [Hướng dẫn test bằng tiếng Việt](HUONG-DAN-TEST.md).
+> Bản này sửa phản hồi nhiều phần và bỏ tự gửi lại bình luận. Lệnh
+> `python -X utf8 -m scripts.comment_probe` mặc định chỉ xem trước; không cần
+> Playwright cho luồng thử. Chưa xác nhận đăng được vào group thật.
+
 Facebook CLI toolkit — posting, scheduling, comments, Messenger, profile
 insights, and subscriber tracking, all via GraphQL API + Playwright.
 Formerly known as `fbpost`; renamed when it grew past posting

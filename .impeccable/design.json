@@ -1,0 +1,544 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-19T04:32:47.627498+00:00",
+  "title": "Design System: CommentLab",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "bg",
+        "tonalRamp": [
+          "oklch(15% 0.00413 157.18)",
+          "oklch(26% 0.00413 157.18)",
+          "oklch(38% 0.00413 157.18)",
+          "oklch(49% 0.00413 157.18)",
+          "oklch(61% 0.00413 157.18)",
+          "oklch(72% 0.00413 157.18)",
+          "oklch(84% 0.00413 157.18)",
+          "oklch(95% 0.00413 157.18)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "surface",
+        "tonalRamp": [
+          "oklch(15% 0.00000 89.88)",
+          "oklch(26% 0.00000 89.88)",
+          "oklch(38% 0.00000 89.88)",
+          "oklch(49% 0.00000 89.88)",
+          "oklch(61% 0.00000 89.88)",
+          "oklch(72% 0.00000 89.88)",
+          "oklch(84% 0.00000 89.88)",
+          "oklch(95% 0.00000 89.88)"
+        ]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "sidebar",
+        "tonalRamp": [
+          "oklch(15% 0.00827 157.09)",
+          "oklch(26% 0.00827 157.09)",
+          "oklch(38% 0.00827 157.09)",
+          "oklch(49% 0.00827 157.09)",
+          "oklch(61% 0.00827 157.09)",
+          "oklch(72% 0.00827 157.09)",
+          "oklch(84% 0.00827 157.09)",
+          "oklch(95% 0.00827 157.09)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "ink",
+        "tonalRamp": [
+          "oklch(15% 0.04409 183.75)",
+          "oklch(26% 0.04409 183.75)",
+          "oklch(38% 0.04409 183.75)",
+          "oklch(49% 0.04409 183.75)",
+          "oklch(61% 0.04409 183.75)",
+          "oklch(72% 0.04409 183.75)",
+          "oklch(84% 0.04409 183.75)",
+          "oklch(95% 0.04409 183.75)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "muted",
+        "tonalRamp": [
+          "oklch(15% 0.03450 169.40)",
+          "oklch(26% 0.03450 169.40)",
+          "oklch(38% 0.03450 169.40)",
+          "oklch(49% 0.03450 169.40)",
+          "oklch(61% 0.03450 169.40)",
+          "oklch(72% 0.03450 169.40)",
+          "oklch(84% 0.03450 169.40)",
+          "oklch(95% 0.03450 169.40)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "line",
+        "tonalRamp": [
+          "oklch(15% 0.01521 164.69)",
+          "oklch(26% 0.01521 164.69)",
+          "oklch(38% 0.01521 164.69)",
+          "oklch(49% 0.01521 164.69)",
+          "oklch(61% 0.01521 164.69)",
+          "oklch(72% 0.01521 164.69)",
+          "oklch(84% 0.01521 164.69)",
+          "oklch(95% 0.01521 164.69)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "accent",
+        "tonalRamp": [
+          "oklch(15% 0.08106 176.54)",
+          "oklch(26% 0.08106 176.54)",
+          "oklch(38% 0.08106 176.54)",
+          "oklch(49% 0.08106 176.54)",
+          "oklch(61% 0.08106 176.54)",
+          "oklch(72% 0.08106 176.54)",
+          "oklch(84% 0.08106 176.54)",
+          "oklch(95% 0.08106 176.54)"
+        ]
+      },
+      "active-account": {
+        "role": "neutral",
+        "displayName": "active-account",
+        "tonalRamp": [
+          "oklch(15% 0.01996 159.73)",
+          "oklch(26% 0.01996 159.73)",
+          "oklch(38% 0.01996 159.73)",
+          "oklch(49% 0.01996 159.73)",
+          "oklch(61% 0.01996 159.73)",
+          "oklch(72% 0.01996 159.73)",
+          "oklch(84% 0.01996 159.73)",
+          "oklch(95% 0.01996 159.73)"
+        ]
+      },
+      "button-ink": {
+        "role": "neutral",
+        "displayName": "button-ink",
+        "tonalRamp": [
+          "oklch(15% 0.05990 175.28)",
+          "oklch(26% 0.05990 175.28)",
+          "oklch(38% 0.05990 175.28)",
+          "oklch(49% 0.05990 175.28)",
+          "oklch(61% 0.05990 175.28)",
+          "oklch(72% 0.05990 175.28)",
+          "oklch(84% 0.05990 175.28)",
+          "oklch(95% 0.05990 175.28)"
+        ]
+      },
+      "button-border": {
+        "role": "neutral",
+        "displayName": "button-border",
+        "tonalRamp": [
+          "oklch(15% 0.02114 173.84)",
+          "oklch(26% 0.02114 173.84)",
+          "oklch(38% 0.02114 173.84)",
+          "oklch(49% 0.02114 173.84)",
+          "oklch(61% 0.02114 173.84)",
+          "oklch(72% 0.02114 173.84)",
+          "oklch(84% 0.02114 173.84)",
+          "oklch(95% 0.02114 173.84)"
+        ]
+      },
+      "button-hover": {
+        "role": "neutral",
+        "displayName": "button-hover",
+        "tonalRamp": [
+          "oklch(15% 0.01162 162.04)",
+          "oklch(26% 0.01162 162.04)",
+          "oklch(38% 0.01162 162.04)",
+          "oklch(49% 0.01162 162.04)",
+          "oklch(61% 0.01162 162.04)",
+          "oklch(72% 0.01162 162.04)",
+          "oklch(84% 0.01162 162.04)",
+          "oklch(95% 0.01162 162.04)"
+        ]
+      },
+      "input-ink": {
+        "role": "neutral",
+        "displayName": "input-ink",
+        "tonalRamp": [
+          "oklch(15% 0.04632 173.10)",
+          "oklch(26% 0.04632 173.10)",
+          "oklch(38% 0.04632 173.10)",
+          "oklch(49% 0.04632 173.10)",
+          "oklch(61% 0.04632 173.10)",
+          "oklch(72% 0.04632 173.10)",
+          "oklch(84% 0.04632 173.10)",
+          "oklch(95% 0.04632 173.10)"
+        ]
+      },
+      "input-border": {
+        "role": "neutral",
+        "displayName": "input-border",
+        "tonalRamp": [
+          "oklch(15% 0.02485 163.00)",
+          "oklch(26% 0.02485 163.00)",
+          "oklch(38% 0.02485 163.00)",
+          "oklch(49% 0.02485 163.00)",
+          "oklch(61% 0.02485 163.00)",
+          "oklch(72% 0.02485 163.00)",
+          "oklch(84% 0.02485 163.00)",
+          "oklch(95% 0.02485 163.00)"
+        ]
+      },
+      "focus": {
+        "role": "neutral",
+        "displayName": "focus",
+        "tonalRamp": [
+          "oklch(15% 0.11938 76.29)",
+          "oklch(26% 0.11938 76.29)",
+          "oklch(38% 0.11938 76.29)",
+          "oklch(49% 0.11938 76.29)",
+          "oklch(61% 0.11938 76.29)",
+          "oklch(72% 0.11938 76.29)",
+          "oklch(84% 0.11938 76.29)",
+          "oklch(95% 0.11938 76.29)"
+        ]
+      },
+      "badge-bg": {
+        "role": "neutral",
+        "displayName": "badge-bg",
+        "tonalRamp": [
+          "oklch(15% 0.01245 156.99)",
+          "oklch(26% 0.01245 156.99)",
+          "oklch(38% 0.01245 156.99)",
+          "oklch(49% 0.01245 156.99)",
+          "oklch(61% 0.01245 156.99)",
+          "oklch(72% 0.01245 156.99)",
+          "oklch(84% 0.01245 156.99)",
+          "oklch(95% 0.01245 156.99)"
+        ]
+      },
+      "badge-ink": {
+        "role": "neutral",
+        "displayName": "badge-ink",
+        "tonalRamp": [
+          "oklch(15% 0.05473 163.67)",
+          "oklch(26% 0.05473 163.67)",
+          "oklch(38% 0.05473 163.67)",
+          "oklch(49% 0.05473 163.67)",
+          "oklch(61% 0.05473 163.67)",
+          "oklch(72% 0.05473 163.67)",
+          "oklch(84% 0.05473 163.67)",
+          "oklch(95% 0.05473 163.67)"
+        ]
+      },
+      "notice-bg": {
+        "role": "neutral",
+        "displayName": "notice-bg",
+        "tonalRamp": [
+          "oklch(15% 0.01244 156.99)",
+          "oklch(26% 0.01244 156.99)",
+          "oklch(38% 0.01244 156.99)",
+          "oklch(49% 0.01244 156.99)",
+          "oklch(61% 0.01244 156.99)",
+          "oklch(72% 0.01244 156.99)",
+          "oklch(84% 0.01244 156.99)",
+          "oklch(95% 0.01244 156.99)"
+        ]
+      },
+      "warning": {
+        "role": "neutral",
+        "displayName": "warning",
+        "tonalRamp": [
+          "oklch(15% 0.08793 69.86)",
+          "oklch(26% 0.08793 69.86)",
+          "oklch(38% 0.08793 69.86)",
+          "oklch(49% 0.08793 69.86)",
+          "oklch(61% 0.08793 69.86)",
+          "oklch(72% 0.08793 69.86)",
+          "oklch(84% 0.08793 69.86)",
+          "oklch(95% 0.08793 69.86)"
+        ]
+      },
+      "warning-bg": {
+        "role": "neutral",
+        "displayName": "warning-bg",
+        "tonalRamp": [
+          "oklch(15% 0.04124 83.88)",
+          "oklch(26% 0.04124 83.88)",
+          "oklch(38% 0.04124 83.88)",
+          "oklch(49% 0.04124 83.88)",
+          "oklch(61% 0.04124 83.88)",
+          "oklch(72% 0.04124 83.88)",
+          "oklch(84% 0.04124 83.88)",
+          "oklch(95% 0.04124 83.88)"
+        ]
+      },
+      "danger": {
+        "role": "neutral",
+        "displayName": "danger",
+        "tonalRamp": [
+          "oklch(15% 0.11864 31.93)",
+          "oklch(26% 0.11864 31.93)",
+          "oklch(38% 0.11864 31.93)",
+          "oklch(49% 0.11864 31.93)",
+          "oklch(61% 0.11864 31.93)",
+          "oklch(72% 0.11864 31.93)",
+          "oklch(84% 0.11864 31.93)",
+          "oklch(95% 0.11864 31.93)"
+        ]
+      },
+      "danger-bg": {
+        "role": "neutral",
+        "displayName": "danger-bg",
+        "tonalRamp": [
+          "oklch(15% 0.02190 35.12)",
+          "oklch(26% 0.02190 35.12)",
+          "oklch(38% 0.02190 35.12)",
+          "oklch(49% 0.02190 35.12)",
+          "oklch(61% 0.02190 35.12)",
+          "oklch(72% 0.02190 35.12)",
+          "oklch(84% 0.02190 35.12)",
+          "oklch(95% 0.02190 35.12)"
+        ]
+      },
+      "table-head": {
+        "role": "neutral",
+        "displayName": "table-head",
+        "tonalRamp": [
+          "oklch(15% 0.00749 151.89)",
+          "oklch(26% 0.00749 151.89)",
+          "oklch(38% 0.00749 151.89)",
+          "oklch(49% 0.00749 151.89)",
+          "oklch(61% 0.00749 151.89)",
+          "oklch(72% 0.00749 151.89)",
+          "oklch(84% 0.00749 151.89)",
+          "oklch(95% 0.00749 151.89)"
+        ]
+      },
+      "table-head-ink": {
+        "role": "neutral",
+        "displayName": "table-head-ink",
+        "tonalRamp": [
+          "oklch(15% 0.03288 170.92)",
+          "oklch(26% 0.03288 170.92)",
+          "oklch(38% 0.03288 170.92)",
+          "oklch(49% 0.03288 170.92)",
+          "oklch(61% 0.03288 170.92)",
+          "oklch(72% 0.03288 170.92)",
+          "oklch(84% 0.03288 170.92)",
+          "oklch(95% 0.03288 170.92)"
+        ]
+      },
+      "table-line": {
+        "role": "neutral",
+        "displayName": "table-line",
+        "tonalRamp": [
+          "oklch(15% 0.00918 161.34)",
+          "oklch(26% 0.00918 161.34)",
+          "oklch(38% 0.00918 161.34)",
+          "oklch(49% 0.00918 161.34)",
+          "oklch(61% 0.00918 161.34)",
+          "oklch(72% 0.00918 161.34)",
+          "oklch(84% 0.00918 161.34)",
+          "oklch(95% 0.00918 161.34)"
+        ]
+      },
+      "status-bg": {
+        "role": "neutral",
+        "displayName": "status-bg",
+        "tonalRamp": [
+          "oklch(15% 0.00663 160.07)",
+          "oklch(26% 0.00663 160.07)",
+          "oklch(38% 0.00663 160.07)",
+          "oklch(49% 0.00663 160.07)",
+          "oklch(61% 0.00663 160.07)",
+          "oklch(72% 0.00663 160.07)",
+          "oklch(84% 0.00663 160.07)",
+          "oklch(95% 0.00663 160.07)"
+        ]
+      },
+      "excerpt-bg": {
+        "role": "neutral",
+        "displayName": "excerpt-bg",
+        "tonalRamp": [
+          "oklch(15% 0.00580 153.78)",
+          "oklch(26% 0.00580 153.78)",
+          "oklch(38% 0.00580 153.78)",
+          "oklch(49% 0.00580 153.78)",
+          "oklch(61% 0.00580 153.78)",
+          "oklch(72% 0.00580 153.78)",
+          "oklch(84% 0.00580 153.78)",
+          "oklch(95% 0.00580 153.78)"
+        ]
+      },
+      "excerpt-ink": {
+        "role": "neutral",
+        "displayName": "excerpt-ink",
+        "tonalRamp": [
+          "oklch(15% 0.03284 167.60)",
+          "oklch(26% 0.03284 167.60)",
+          "oklch(38% 0.03284 167.60)",
+          "oklch(49% 0.03284 167.60)",
+          "oklch(61% 0.03284 167.60)",
+          "oklch(72% 0.03284 167.60)",
+          "oklch(84% 0.03284 167.60)",
+          "oklch(95% 0.03284 167.60)"
+        ]
+      },
+      "selection": {
+        "role": "neutral",
+        "displayName": "Bôi chọn văn bản",
+        "tonalRamp": [
+          "oklch(15% 0.03603 156.93)",
+          "oklch(26% 0.03603 156.93)",
+          "oklch(38% 0.03603 156.93)",
+          "oklch(49% 0.03603 156.93)",
+          "oklch(61% 0.03603 156.93)",
+          "oklch(72% 0.03603 156.93)",
+          "oklch(84% 0.03603 156.93)",
+          "oklch(95% 0.03603 156.93)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Tiêu đề trang",
+        "purpose": "Tên vùng làm việc và tài khoản."
+      },
+      "title": {
+        "displayName": "Tiêu đề vùng",
+        "purpose": "Panel và bài viết."
+      },
+      "body": {
+        "displayName": "Nội dung",
+        "purpose": "Chữ hệ thống và control."
+      },
+      "label": {
+        "displayName": "Thông tin nhỏ",
+        "purpose": "Badge, trạng thái và đầu bảng."
+      },
+      "brand": {
+        "displayName": "Tên ứng dụng",
+        "purpose": "Thương hiệu desktop, cùng độ đậm trên toàn tên trong runtime có CSP."
+      },
+      "brand-mobile": {
+        "displayName": "Tên ứng dụng mobile",
+        "purpose": "Thương hiệu tại viewport tối đa 760px."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "stacked",
+        "value": "760px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Hành động Gửi bình luận chính; hover giữ nền teal theo cascade.",
+      "html": "<button class=\"ds-primary\">Gửi bình luận</button>",
+      "css": ".ds-primary{font:14px \"Segoe UI\",sans-serif;cursor:pointer;border:1px solid #bed0ca;border-radius:7px;padding:10px 14px;background:#176b5b;color:#fff;border-color:#176b5b}.ds-primary:focus-visible{outline:3px solid #b58128;outline-offset:2px}.ds-primary:disabled{opacity:.5;cursor:not-allowed} .ds-primary:hover{background:#176b5b}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Trạng thái và cascade theo ui/app.css.",
+      "html": "<button class=\"ds-secondary\">Kiểm tra & lưu nhóm</button>",
+      "css": ".ds-secondary{font:14px \"Segoe UI\",sans-serif;cursor:pointer;border:1px solid #bed0ca;border-radius:7px;padding:10px 14px;background:#fff;color:#164c40;border-color:#bed0ca}.ds-secondary:hover{background:#e8f1ec}.ds-secondary:focus-visible{outline:3px solid #b58128;outline-offset:2px}.ds-secondary:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Delete button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Trạng thái và cascade theo ui/app.css.",
+      "html": "<button class=\"ds-danger\">Xóa tài khoản</button>",
+      "css": ".ds-danger{font:14px \"Segoe UI\",sans-serif;cursor:pointer;border:1px solid #bed0ca;border-radius:7px;padding:10px 14px;background:#fbe8e3;color:#913c2d;border-color:#bed0ca}.ds-danger:focus-visible{outline:3px solid #b58128;outline-offset:2px}.ds-danger:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Labeled field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Trường nhập có nhãn và focus vàng nâu.",
+      "html": "<label class=\"ds-label\">Tên gợi nhớ<input class=\"ds-input\" placeholder=\"Tên tài khoản\"></label>",
+      "css": ".ds-label{display:block;font:14px \"Segoe UI\",sans-serif;color:#163c37}.ds-input{display:block;width:100%;max-width:100%;font:inherit;padding:11px;border:1px solid #b7cac0;background:#fff;border-radius:7px;color:#173c32}.ds-input:focus-visible{outline:3px solid #b58128;outline-offset:2px}"
+    },
+    {
+      "name": "Workspace navigation",
+      "kind": "nav",
+      "refersTo": "tab-active",
+      "description": "Gửi bình luận, Xem trước tùy chọn và Lịch sử; Hướng dẫn nằm ở header.",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"Các bước\"><button class=\"ds-active\">Gửi bình luận</button><button>Xem trước</button><button>Lịch sử</button></nav>",
+      "css": ".ds-tabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid #d3dfd9;padding-bottom:10px}.ds-tabs button{font:14px \"Segoe UI\",sans-serif;cursor:pointer;border:1px solid #bed0ca;border-radius:7px;padding:10px 14px;background:transparent;border-color:transparent;color:#164c40}.ds-tabs .ds-active{background:#176b5b;color:#fff}.ds-tabs button:focus-visible{outline:3px solid #b58128;outline-offset:2px} .ds-tabs button:hover{background:transparent}.ds-tabs .ds-active:hover{background:#176b5b}@media(max-width:760px){.ds-tabs{gap:0}.ds-tabs button{padding:10px}}"
+    },
+    {
+      "name": "Local badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Nhãn thông tin, không phải control tương tác.",
+      "html": "<span class=\"ds-badge\">Trên máy này</span>",
+      "css": ".ds-badge{font:12px \"Segoe UI\",sans-serif;background:#e5eee8;color:#345c4a;padding:5px 9px;border-radius:5px}"
+    },
+    {
+      "name": "Selected account",
+      "kind": "button",
+      "refersTo": "account-active",
+      "description": "Tên và trạng thái của tài khoản đang chọn.",
+      "html": "<button class=\"ds-account\"><strong>Tài khoản mẫu</strong><small>Đã lưu phiên</small></button>",
+      "css": ".ds-account{font:14px \"Segoe UI\",sans-serif;cursor:pointer;border:1px solid #bed0ca;border-radius:7px;padding:10px 14px;text-align:left;width:100%;padding:14px;background:#dcebe2;border-color:#176b5b;color:#164c40}.ds-account strong{display:block}.ds-account small{display:block;margin-top:6px;font-size:12px;color:#536d63}.ds-account:focus-visible{outline:3px solid #b58128;outline-offset:2px}"
+    },
+    {
+      "name": "Optional post preview",
+      "kind": "card",
+      "refersTo": "review",
+      "description": "Xem trích đoạn, chọn bài và sửa nội dung riêng; không phải bước duyệt bắt buộc. Dữ liệu mẫu.",
+      "html": "<article class=\"ds-review\"><h3>Nhóm mẫu</h3><small><a href=\"https://www.facebook.com/groups/123/posts/456/\">Bài 456</a></small><blockquote>Trích đoạn bài viết</blockquote><label><input type=\"checkbox\" checked> Chọn bài này</label><label>Nội dung bình luận<textarea>Nội dung mẫu</textarea></label></article>",
+      "css": ".ds-review{font:14px \"Segoe UI\",sans-serif;color:#163c37;background:#fff;border:1px solid #d3dfd9;border-radius:10px;padding:20px}.ds-review h3{font-size:16px;margin:0 0 9px}.ds-review blockquote{margin:12px 0;padding:12px;background:#f1f5f2;color:#4e665c;border-radius:6px}.ds-review label{display:block}.ds-review textarea{display:block;font:inherit;width:100%;min-height:88px;resize:vertical;margin:12px 0;padding:11px;border:1px solid #b7cac0;border-radius:7px;color:#173c32;background:#fff}.ds-review input{width:18px;height:18px;vertical-align:middle;accent-color:#176b5b}.ds-review textarea:focus-visible{outline:3px solid #b58128;outline-offset:2px}.ds-review input:focus-visible{outline:3px solid #b58128;outline-offset:2px} .ds-review a{color:#176b5b;overflow-wrap:anywhere}.ds-review small{display:block;margin-top:6px;color:#536d63;overflow-wrap:anywhere}"
+    },
+    {
+      "name": "Help disclosures",
+      "kind": "custom",
+      "description": "Hướng dẫn native details/summary, chiều rộng vừa đọc và đường chia mảnh.",
+      "html": "<section class=\"ds-help\"><h2>Bắt đầu</h2><ol><li>Chọn tài khoản.</li><li>Chọn nguồn và nhập nội dung.</li><li>Bấm Gửi bình luận.</li></ol><p><strong>Xem trước là tùy chọn.</strong></p><details><summary>Lịch sử và dữ liệu</summary><p>Dùng Mới hơn / Cũ hơn để xem tiếp.</p></details></section>",
+      "css": ".ds-help{font:14px/1.65 \"Segoe UI\",sans-serif;color:#163c37;max-width:760px}.ds-help h2{font-size:16px;margin:0 0 16px}.ds-help p{line-height:1.55}.ds-help details{margin:15px 0;border-bottom:1px solid #d3dfd9;padding:12px 0}.ds-help summary{font-weight:600;cursor:pointer}.ds-help ol{padding-left:24px}.ds-help li{margin:8px 0}"
+    },
+    {
+      "name": "History row",
+      "kind": "custom",
+      "description": "Tên tài khoản, nhóm, link bài và kết quả; 50 bản ghi mỗi trang với Mới hơn / Cũ hơn.",
+      "html": "<article class=\"ds-history\"><div><strong>Tài khoản mẫu</strong><small>ID 123</small></div><div><strong><a href=\"https://www.facebook.com/groups/123/\">Nhóm mẫu</a></strong><small><a href=\"https://www.facebook.com/groups/123/posts/456/\">Bài 456</a></small></div><div><time>19/10/2026</time><span class=\"ds-status\">Chưa rõ kết quả</span><small>Dữ liệu minh họa</small></div></article>",
+      "css": ".ds-history{font:14px \"Segoe UI\",sans-serif;color:#163c37;display:grid;grid-template-columns:1fr 1.3fr 1.6fr;gap:18px;padding:18px 0;border-bottom:1px solid #d3dfd9}.ds-history>div{min-width:0;overflow-wrap:anywhere}.ds-history small{display:block;margin-top:6px;color:#536d63}.ds-history time{display:block;margin-bottom:8px;color:#536d63}.ds-history a{color:#176b5b}.ds-status{font-size:12px;border-radius:5px;padding:5px 8px;background:#edf2ef;display:inline-block}@media(max-width:760px){.ds-history{grid-template-columns:1fr;gap:12px}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Bàn thao tác gọn, rõ tài khoản",
+    "overview": "Nền xanh xám nhạt, mặt trắng, chữ xanh mực và hành động teal. Font hệ thống, đường phân vùng mảnh và nội dung ngắn giúp người vận hành biết đang dùng tài khoản nào, chọn nguồn nào và gửi nội dung nào.\n\nNguồn thiết kế là mockup tương tác gọn đã được người dùng duyệt, sau đó chuyển vào ứng dụng nhiều tài khoản. Tài liệu trích xuất từ `ui/app.css`, `ui/index.html`, `ui/app.js`, theo `PRODUCT.md` và `.impeccable/direction.md` hiện hành. Các ảnh runtime `desktop-direct.png`, `mobile-direct.png`, `help-direct.png` và `history-viewport-direct.png` trong `.impeccable/review/` đối chiếu màn gửi trực tiếp, Hướng dẫn và lịch sử. Kết luận ship áp dụng cho đợt tinh chỉnh UI này; ảnh dùng dữ liệu thử và không chứng minh gửi Facebook thật.",
+    "keyCharacteristics": [
+      "Sidebar tài khoản và một vùng làm việc chính.",
+      "Mặt phẳng, viền mảnh, không bóng đổ hoặc ảnh trang trí.",
+      "Gửi trực tiếp là hành động chính; xem trước để chọn bài và sửa nội dung riêng khi cần.",
+      "Trạng thái luôn có chữ, màu chỉ hỗ trợ nhận biết."
+    ],
+    "rules": [
+      {
+        "name": "The Status Label Rule",
+        "body": "Mọi trạng thái cần nhãn chữ; màu không chứng minh bình luận đã hiển thị trên Facebook.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do giữ tài khoản hiện tại và trạng thái bằng chữ dễ nhận biết.",
+      "Do giữ outline bàn phím rõ và nhãn cho trường nhập.",
+      "Do giữ bố cục một cột trên mobile và cuộn riêng danh sách tài khoản.",
+      "Do giữ bản nháp khi thao tác thất bại và vô hiệu bản xem trước khi nguồn hoặc nội dung chung thay đổi."
+    ],
+    "donts": [
+      "Don't mô tả phiên đã lưu là phiên đã được Facebook xác thực.",
+      "Don't dùng màu xanh để khẳng định bình luận đã hiển thị thật.",
+      "Don't khôi phục bố cục phiên/soạn/biên nhận ba cột từ bản cũ.",
+      "Don't thêm font ngoài, ảnh trang trí hoặc bóng đổ vào hệ hiện hành khi chưa có quyết định thiết kế mới."
+    ]
+  }
+}

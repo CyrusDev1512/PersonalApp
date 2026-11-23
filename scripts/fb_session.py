@@ -280,11 +280,11 @@ def _graphql_post(session, tokens, actor_id, doc_id, friendly_name, variables):
         "X-FB-Friendly-Name": friendly_name,
     })
 
-    resp = session.post(GRAPHQL_URL, data=form_data, timeout=60)
+    # A redirect must not replay a write (307/308) or turn login HTML into 200.
+    resp = session.post(GRAPHQL_URL, data=form_data, timeout=60, allow_redirects=False)
 
     if resp.status_code != 200:
         print(f"Error: HTTP {resp.status_code}", file=sys.stderr)
-        print(resp.text[:500], file=sys.stderr)
         sys.exit(1)
 
     body = resp.text
@@ -333,6 +333,109 @@ def graphql_chunks(
     return chunks
 
 
+def _merge_graphql_value(existing, incoming):
+    """Merge deferred fields without discarding previously received siblings."""
+    if isinstance(existing, dict) and isinstance(incoming, dict):
+        for key, value in incoming.items():
+            existing[key] = _merge_graphql_value(existing.get(key), value)
+        return existing
+    return incoming
+
+
+def _apply_graphql_patch(root, path, value):
+    if not path:
+        return _merge_graphql_value(root, value)
+    key, *rest = path
+    if isinstance(key, bool) or not isinstance(key, (str, int)):
+        raise ValueError("Invalid GraphQL patch path")
+    if isinstance(key, int):
+        if key < 0 or key > 10000:
+            raise ValueError("Invalid GraphQL patch index")
+        if root is None:
+            root = []
+        if not isinstance(root, list):
+            raise ValueError("GraphQL patch type conflict")
+        while len(root) <= key:
+            root.append(None)
+        root[key] = _apply_graphql_patch(root[key], rest, value)
+    else:
+        if root is None:
+            root = {}
+        if not isinstance(root, dict):
+            raise ValueError("GraphQL patch type conflict")
+        root[key] = _apply_graphql_patch(root.get(key), rest, value)
+    return root
+
+
+def parse_graphql_response(body: str) -> dict:
+    """Read complete JSON/Relay streams, including deferred paths and errors.
+
+    An unreadable tail is an error, never a successful partial response. Raw
+    response bodies are deliberately not included in exception messages.
+    """
+    body = body.lstrip()
+    if body.startswith("for (;;);"):
+        body = body[len("for (;;);"):]
+    decoder = json.JSONDecoder()
+    chunks = []
+    while body.strip():
+        body = body.lstrip()
+        try:
+            chunk, end = decoder.raw_decode(body)
+        except json.JSONDecodeError:
+            raise ValueError("Incomplete or invalid GraphQL response") from None
+        if not isinstance(chunk, dict):
+            raise ValueError("Expected a GraphQL object")
+        chunks.append(chunk)
+        body = body[end:]
+    if not chunks:
+        raise ValueError("Empty GraphQL response")
+
+    result = {}
+    errors = []
+    incomplete = False
+    for chunk in chunks:
+        patches = [chunk]
+        incremental = chunk.get("incremental", [])
+        if not isinstance(incremental, list):
+            raise ValueError("Invalid GraphQL incremental response")
+        patches.extend(incremental)
+        for patch in patches:
+            if not isinstance(patch, dict):
+                raise ValueError("Invalid GraphQL patch")
+            patch_errors = patch.get("errors") or []
+            if not isinstance(patch_errors, list):
+                raise ValueError("Invalid GraphQL errors")
+            errors.extend(patch_errors)
+            path = patch.get("path", [])
+            if not isinstance(path, list):
+                raise ValueError("Invalid GraphQL path")
+            if path and path[0] == "data":
+                path = path[1:]
+            if "data" in patch:
+                result["data"] = _apply_graphql_patch(result.get("data"), path, patch["data"])
+            if "items" in patch:
+                if not path or not isinstance(path[-1], int) or not isinstance(patch["items"], list):
+                    raise ValueError("Invalid GraphQL streamed items")
+                for offset, item in enumerate(patch["items"]):
+                    item_path = path[:-1] + [path[-1] + offset]
+                    result["data"] = _apply_graphql_patch(result.get("data"), item_path, item)
+        for container in (chunk, chunk.get("extensions", {})):
+            if not isinstance(container, dict):
+                continue
+            if "hasNext" in container:
+                incomplete = container["hasNext"] is True
+            if "is_final" in container:
+                incomplete = container["is_final"] is False
+    if errors:
+        result["errors"] = errors
+    if incomplete:
+        result["_stream_incomplete"] = True
+    if not result:
+        raise ValueError("GraphQL response contains no result")
+    return result
+
+
 def graphql_request(
     session: requests.Session,
     tokens: dict[str, str],
@@ -341,36 +444,17 @@ def graphql_request(
     friendly_name: str,
     variables: dict,
 ) -> dict:
-    """POST to /api/graphql/ with token injection and response parsing."""
-    def _check_graphql_errors(data):
-        # An HTTP 200 can still carry a GraphQL-level failure (expired
-        # token, rate limit, permission). Returning it as success makes
-        # callers read empty `data` and report nothing wrong.
-        if isinstance(data, dict) and data.get("errors") and not data.get("data"):
-            print("Error: GraphQL request failed:", file=sys.stderr)
-            for err in data["errors"]:
-                print(f"  {err.get('message', err)}", file=sys.stderr)
-            sys.exit(1)
-        return data
-
+    """POST once and merge the entire response; never return just its first chunk."""
     body = _graphql_post(session, tokens, actor_id, doc_id, friendly_name, variables)
-
     try:
-        return _check_graphql_errors(json.loads(body))
-    except json.JSONDecodeError:
-        for line in body.strip().split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-                if "data" in data:
-                    return data
-            except json.JSONDecodeError:
-                continue
-        print("Error: Could not parse response JSON", file=sys.stderr)
-        print(body[:500], file=sys.stderr)
+        result = parse_graphql_response(body)
+    except ValueError:
+        print("Error: Could not parse a complete GraphQL response", file=sys.stderr)
         sys.exit(1)
+    if result.get("errors") and not result.get("data"):
+        print("Error: GraphQL request failed; no automatic retry", file=sys.stderr)
+        sys.exit(1)
+    return result
 
 
 def fetch_story_text(session, tokens, actor_id, story_id):

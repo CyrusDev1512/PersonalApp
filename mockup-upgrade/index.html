@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <title>CommentLab · Bản thử</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Tới nội dung</a>
+  <header class="app-header">
+    <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H10l-6 5V4Z"/><path d="M8 8h8M8 12h5"/></svg><span>Comment<span class="brand-light">Lab</span></span><span class="demo-tag">Bản thử</span></div>
+    <button id="help" class="quiet"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4M12 16h.01"/></svg>Hướng dẫn</button>
+  </header>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Tài khoản mẫu">
+      <div class="sidebar-heading">Tài khoản <span id="account-count" class="count">2</span></div>
+      <div id="accounts" class="accounts"></div>
+      <button id="add-account" class="add-account">Thêm tài khoản</button>
+      <form id="account-form" class="account-form" hidden>
+        <label for="account-name">Tên tài khoản mẫu</label>
+        <input id="account-name" maxlength="40" required placeholder="Ví dụ: Hoàng Nam" autocomplete="off">
+        <div class="actions"><button type="submit" class="primary">Lưu tài khoản</button><button type="button" id="cancel-account" class="quiet">Hủy</button></div>
+      </form>
+      <div class="sidebar-footer"><span class="dot"></span> Dữ liệu mẫu trên máy</div>
+    </aside>
+    <main id="main" tabindex="-1">
+      <nav class="navigation" aria-label="Chức năng">
+        <button data-tab="work" aria-current="page">Làm việc</button>
+        <button data-tab="history">Lịch sử</button>
+        <button data-tab="settings">Cài đặt</button>
+      </nav>
+      <div id="view"></div>
+    </main>
+  </div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="detail" class="sheet" aria-labelledby="detail-title">
+    <div class="sheet-header"><span>Chi tiết</span><button data-close="detail" class="icon-button" aria-label="Đóng chi tiết"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <div id="detail-content" class="sheet-content"></div>
+  </dialog>
+  <dialog id="confirmation" class="confirmation" aria-labelledby="confirm-title">
+    <div id="confirm-content"></div>
+  </dialog>
+</body>
+</html>

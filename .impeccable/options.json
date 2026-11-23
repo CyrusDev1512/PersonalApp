@@ -1,0 +1,216 @@
+{
+  "buildPath": {
+    "value": "code",
+    "toggle": true
+  },
+  "canonCard": {
+    "comp": ".impeccable/mocks/decision/canon.webp",
+    "risk": "Ít khác biệt về thiết kế.",
+    "label": "Giao diện công cụ truyền thống",
+    "materials": [
+      "Form tiêu chuẩn"
+    ],
+    "viewport": "Thanh tab trên, form dưới, kết quả cuối trang.",
+    "palette": [
+      "#ffffff",
+      "#1f2937",
+      "#2563eb"
+    ],
+    "thesis": "Form và bảng kết quả theo bố cục quen thuộc."
+  },
+  "steer": true,
+  "canon": true,
+  "options": [
+    {
+      "kicker": "PHƯƠNG ÁN THIẾT KẾ",
+      "palette": [
+        "#f3f4ef",
+        "#172d30",
+        "#176c63"
+      ],
+      "wireframe": {
+        "rows": 8,
+        "cols": 12,
+        "regions": [
+          {
+            "y": 0,
+            "x": 0,
+            "label": "Phiên đăng nhập",
+            "w": 3,
+            "h": 8
+          },
+          {
+            "label": "Bài và nội dung",
+            "accent": true,
+            "y": 0,
+            "w": 5,
+            "x": 3,
+            "h": 8
+          },
+          {
+            "y": 0,
+            "x": 8,
+            "label": "Xem trước / Kết quả",
+            "w": 4,
+            "h": 8
+          }
+        ]
+      },
+      "label": "Bàn thử Comment Lab",
+      "thesis": "Chuẩn bị bên trái, soạn bình luận ở giữa, xem trước và kết quả bên phải.",
+      "viewport": "Form và kết quả cùng một màn hình; mobile theo trình tự từ trên xuống.",
+      "raised": [
+        {
+          "raise": "Bước tiếp theo và nút chính luôn rõ.",
+          "from": "Hệ biển chỉ dẫn"
+        },
+        {
+          "raise": "Trợ giúp đặt sát trường cần nhập.",
+          "from": "Sổ tham chiếu"
+        },
+        {
+          "raise": "Kết quả giữ lại như biên nhận.",
+          "from": "Vé hành trình"
+        }
+      ],
+      "materials": [
+        "Giấy sáng",
+        "Mực xanh đậm",
+        "Phân vùng theo công việc"
+      ],
+      "id": "assigned",
+      "comp": ".impeccable/mocks/decision/assigned.webp",
+      "risk": "Ba cột cần thu gọn tốt trên màn hình nhỏ."
+    },
+    {
+      "kicker": "GỢI Ý KHÁC",
+      "palette": [
+        "#f5f6fa",
+        "#1e293b",
+        "#3159a8"
+      ],
+      "label": "Bàn điều phối",
+      "thesis": "Form lớn chiếm màn hình, kết quả ở bên dưới.",
+      "viewport": "Soạn thảo rộng, các mục phiên thu gọn.",
+      "materials": [
+        "Bố cục văn phòng"
+      ],
+      "id": "pick",
+      "comp": ".impeccable/mocks/decision/pick.webp",
+      "risk": "Quen thuộc nhưng cần cuộn xuống để xem kết quả."
+    },
+    {
+      "board": "https://impeccable.style/worlds/cards/vernacular-ephemera-jet-age-ticket-wallet.webp",
+      "materials": [
+        "Phiếu trắng",
+        "Dòng kẻ"
+      ],
+      "thesis": "Chuẩn bị, xem trước và kết quả thành ba bước liên tiếp.",
+      "label": "Phiếu thử theo bước",
+      "verdict": "competitive",
+      "viewport": "Mỗi lúc tập trung một bước, xem lại được bước trước.",
+      "palette": [
+        "#f8f6f0",
+        "#19375b",
+        "#ac4132"
+      ],
+      "id": "wallet",
+      "case": "Dễ theo dõi trình tự nhưng ít thông tin cùng lúc.",
+      "comp": ".impeccable/mocks/decision/wallet.webp",
+      "risk": "Phải chuyển bước nhiều hơn."
+    },
+    {
+      "materials": [
+        "Hệ thông tin"
+      ],
+      "thesis": "Đã đối chiếu với luồng một bình luận.",
+      "kept": "Căn trường và trợ giúp cạnh nhau",
+      "label": "Sổ tham chiếu",
+      "verdict": "declined",
+      "viewport": "Ưu tiên công việc đang làm.",
+      "palette": [
+        "#f3f4ef",
+        "#172d30"
+      ],
+      "id": "reference",
+      "case": "Thua ở độ gần gũi và độ rõ công việc.",
+      "risk": "Ẩn dụ kém gần gũi với người vận hành."
+    },
+    {
+      "materials": [
+        "Hệ thông tin"
+      ],
+      "thesis": "Đã đối chiếu với luồng một bình luận.",
+      "kept": "Nút tiếp theo dễ tìm",
+      "label": "Biển chỉ dẫn",
+      "verdict": "declined",
+      "viewport": "Ưu tiên công việc đang làm.",
+      "palette": [
+        "#f3f4ef",
+        "#172d30"
+      ],
+      "id": "airport",
+      "case": "Thua ở độ gần gũi và độ rõ công việc.",
+      "risk": "Ẩn dụ kém gần gũi với người vận hành."
+    },
+    {
+      "materials": [
+        "Hệ thông tin"
+      ],
+      "thesis": "Đã đối chiếu với luồng một bình luận.",
+      "kept": "Đồng bộ tiến trình và trạng thái",
+      "label": "Bản ký hiệu",
+      "verdict": "declined",
+      "viewport": "Ưu tiên công việc đang làm.",
+      "palette": [
+        "#f3f4ef",
+        "#172d30"
+      ],
+      "id": "dance",
+      "case": "Thua ở độ gần gũi và độ rõ công việc.",
+      "risk": "Ẩn dụ kém gần gũi với người vận hành."
+    },
+    {
+      "materials": [
+        "Hệ thông tin"
+      ],
+      "thesis": "Đã đối chiếu với luồng một bình luận.",
+      "kept": "Focus rõ vùng thao tác",
+      "label": "Thư viện hình",
+      "verdict": "declined",
+      "viewport": "Ưu tiên công việc đang làm.",
+      "palette": [
+        "#f3f4ef",
+        "#172d30"
+      ],
+      "id": "stream",
+      "case": "Thua ở độ gần gũi và độ rõ công việc.",
+      "risk": "Ẩn dụ kém gần gũi với người vận hành."
+    },
+    {
+      "materials": [
+        "Hệ thông tin"
+      ],
+      "thesis": "Đã đối chiếu với luồng một bình luận.",
+      "kept": "Cột nhật ký ổn định",
+      "label": "Bảng chuyến tàu",
+      "verdict": "declined",
+      "viewport": "Ưu tiên công việc đang làm.",
+      "palette": [
+        "#f3f4ef",
+        "#172d30"
+      ],
+      "id": "rail",
+      "case": "Thua ở độ gần gũi và độ rõ công việc.",
+      "risk": "Ẩn dụ kém gần gũi với người vận hành."
+    }
+  ],
+  "question": "Chọn bố cục cho tool. Mọi phương án đều chạy local và dùng request trực tiếp.",
+  "reroll": {
+    "registers": [
+      "safer",
+      "bolder"
+    ]
+  },
+  "title": "Giao diện Comment Lab"
+}

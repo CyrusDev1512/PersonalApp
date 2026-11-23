@@ -86,7 +86,8 @@ def _resolve_post_id(raw: str) -> str:
     sys.exit(1)
 
 
-def _try_comment(session, tokens, actor_id, post_id: str, text: str):
+def _try_comment(session, tokens, actor_id, post_id: str, text: str,
+                 *, idempotence_token=None):
     """Create a TOP-LEVEL comment on one of our own posts via GraphQL.
 
     Works on scheduled (unpublished) posts too — feedback:<post_id> resolves
@@ -111,7 +112,7 @@ def _try_comment(session, tokens, actor_id, post_id: str, text: str):
             "is_tracking_encrypted": True,
             "tracking": [],
             "feedback_source": "DEDICATED_COMMENTING_SURFACE",
-            "idempotence_token": f"client:{uuid.uuid4()}",
+            "idempotence_token": idempotence_token or f"client:{uuid.uuid4()}",
             "session_id": session_id,
         },
         "inviteShortLinkKey": None,
@@ -126,52 +127,40 @@ def _try_comment(session, tokens, actor_id, post_id: str, text: str):
         session, tokens, actor_id, REPLY_DOC_ID,
         "useCometUFICreateCommentMutation", variables,
     )
-    if "errors" in data:
+    if data.get("errors") or data.get("_stream_incomplete"):
         return False, data
     cc = (data.get("data") or {}).get("comment_create") or {}
     node = (cc.get("feedback_comment_edge") or {}).get("node") or {}
     body = (node.get("preferred_body") or node.get("body") or {}).get("text", "")
-    return bool(node.get("id") and text in body), data
+    # Empty text and substring matches must not confirm the wrong result.
+    return bool(node.get("id") and text.strip() and text == body), data
 
 
 def _report_comment_failure(data):
     """Print whatever Facebook said about a comment that did not land."""
-    if "errors" in data:
-        print("Error from Facebook while commenting:", file=sys.stderr)
-        print(json.dumps(data["errors"], indent=2, ensure_ascii=False), file=sys.stderr)
+    if data.get("errors"):
+        print("Facebook returned an error; comment not confirmed. No automatic retry.", file=sys.stderr)
         return
     print(
-        "FAILED: Facebook did not return the created comment — "
-        "comment may NOT have been posted.",
+        "UNCONFIRMED: The comment may have been posted. "
+        "Check the post before any new attempt; no automatic retry.",
         file=sys.stderr,
     )
-    print(json.dumps(data, ensure_ascii=False)[:800], file=sys.stderr)
 
 
 def _create_comment(session, tokens, actor_id, post_id: str, text: str,
-                    attempts=3, delay=5, initial_delay=0, fail_hint=""):
-    """Comment on one of our own posts, exiting non-zero if it did not land.
+                    attempts=1, delay=5, initial_delay=0, fail_hint=""):
+    """Write once. Ambiguous responses must never cause a second comment.
 
-    Retries because Facebook needs a moment to index a *just-created* post:
-    comment too soon and the mutation answers 1446013「貼文已移除」even though
-    the post is fine. That lag hits scheduled AND immediately-published posts,
-    so the retry lives here on the shared path — it was scheduled-only until
-    2026-08-09, and the immediate path silently dropped the URL comment twice
-    (2026-08-04 subscriber post, 2026-08-09 before-you-borrow post).
-
-    `fail_hint` is the recovery line printed when every attempt failed. The
-    post itself already exists by then, so callers must never re-post.
+    attempts/delay remain accepted for existing callers but no longer replay
+    writes. A server-returned ID without text may still represent a real write.
     """
-    data = {}
-    for attempt in range(attempts):
-        if attempt:
-            time.sleep(delay)
-        elif initial_delay:
-            time.sleep(initial_delay)
-        ok, data = _try_comment(session, tokens, actor_id, post_id, text)
-        if ok:
-            print(f"Comment created on post {post_id}: {text}")
-            return
+    if initial_delay:
+        time.sleep(initial_delay)
+    ok, data = _try_comment(session, tokens, actor_id, post_id, text)
+    if ok:
+        print(f"Comment created on post {post_id}: {text}")
+        return
     _report_comment_failure(data)
     if fail_hint:
         print(fail_hint, file=sys.stderr)
